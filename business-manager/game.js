@@ -162,7 +162,7 @@ function newGame(company) {
   }
   for (let i = 0; i < 8; i++) state.candidates.push(makeCandidate());
   log(`Ласкаво просимо, ${state.company}! Стартовий капітал: ${money(state.cash)}.`, 'good');
-  log('Відкрийте «Мапу», оберіть вільне приміщення і запустіть перший бізнес.');
+  log('Відкрийте «Місто», торкніться вільної ділянки ＋ і запустіть перший бізнес.');
 }
 
 function npcName() { return pick(['Смак', 'Лавка', 'Добрий', 'Міський', 'Сонячний', 'Кутик', 'Експрес', 'Плюс', 'Вільний', 'Старий']) + ' ' + pick(['№1', 'Маркет', 'Хаб', 'Стиль', 'Дім', 'Point', 'Світ', 'Ко']); }
@@ -540,7 +540,7 @@ let pendingConfirm = null;
 function confirmBox(msg, fn) { pendingConfirm = fn; showModal(`<p>${msg}</p><div class="row end"><button class="btn" data-act="modalClose">Скасувати</button><button class="btn danger" data-act="confirmYes">Так</button></div>`); }
 
 const NAV = [
-  ['dashboard', '📊', 'Огляд'], ['map', '🗺️', 'Мапа'], ['businesses', '🏪', 'Бізнеси'],
+  ['dashboard', '📊', 'Огляд'], ['map', '🏙️', 'Місто'], ['businesses', '🏪', 'Бізнеси'],
   ['staff', '👥', 'Персонал', 'Люди'], ['bank', '🏦', 'Банк'], ['stats', '📈', 'Статистика', 'Графіки'],
   ['achievements', '🏆', 'Досягнення', 'Нагороди'], ['settings', '⚙️', 'Гра'],
 ];
@@ -571,10 +571,15 @@ function render(force = true) {
   const ae = document.activeElement;
   if (!force && ae && main.contains(ae) && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) return;
   if (!force && now - lastMainRender < 300) return;
+  if (!force && state.ui.view === 'map' && use3D()) return;
   lastMainRender = now;
   renderNav();
   const v = VIEWS[state.ui.view] || VIEWS.dashboard;
+  if (!force && state.ui.view === 'map' && use3D()) return; // 3D-сцена оновлюється сама
   main.innerHTML = v();
+  const c3 = document.getElementById('city3d');
+  if (c3) City3D.mount(c3, (id) => { state.ui.lot = id; render(true); });
+  document.body.classList.toggle('in-city', !!c3);
   requestAnimationFrame(drawCharts);
 }
 
@@ -646,11 +651,11 @@ const VIEWS = {
     </div>`;
     if (!state.biz.length) {
       html += `<div class="card hero"><h2>З чого почати?</h2><ol>
-        <li>Відкрийте <b>Мапу</b> та оберіть вільне приміщення.</li>
+        <li>Відкрийте <b>Місто</b> і торкніться вільної ділянки ＋.</li>
         <li>Оберіть тип бізнесу, що підходить району.</li>
         <li>Найміть персонал і закупіть товар.</li>
         <li>Налаштуйте ціни, маркетинг — і ростіть імперію!</li></ol>
-        <button class="btn primary" data-act="nav" data-v="map">🗺️ До мапи</button></div>`;
+        <button class="btn primary" data-act="nav" data-v="map">🏙️ До міста</button></div>`;
     } else {
       html += `<div class="card"><h3>Мої бізнеси</h3><div class="table-wrap"><table><thead><tr><th>Бізнес</th><th>Статус</th><th>Репутація</th><th>Виручка сьогодні</th><th>Прибуток учора</th></tr></thead><tbody>
       ${state.biz.map((b) => `<tr class="click" data-act="biz" data-id="${b.id}"><td>${TYPES[b.type].icon} ${esc(b.name)}<br><small>${DMAP[lotOf(b).district].name}</small></td><td>${bizStatus(b)}</td><td class="rep">${repBar(b.rep)}</td><td>${money(b.today.rev)}</td><td class="${b.yest && b.yest.profit < 0 ? 'neg' : 'pos'}">${b.yest ? money(b.yest.profit) : '—'}</td></tr>`).join('')}
@@ -665,7 +670,18 @@ const VIEWS = {
 
   map() {
     const sel = state.ui.lot && state.lots.find((l) => l.id === state.ui.lot);
-    let html = `<h1>Мапа міста</h1><p class="muted">Оберіть приміщення. <span class="lg own"></span> ваші · <span class="lg npc"></span> конкуренти · <span class="lg free"></span> вільні</p><div class="map">`;
+    if (use3D()) {
+      return `<div class="city-wrap"><div id="city3d"></div>
+        <div class="city-hint">${sel ? '' : 'Торкніться будівлі або ділянки ＋'}</div>
+        <div class="city-ctrl">
+          <button data-act="cam" data-v="in" aria-label="Наблизити">＋</button><button data-act="cam" data-v="out" aria-label="Віддалити">−</button>
+          <button data-act="cam" data-v="left" aria-label="Повернути ліворуч">⟲</button><button data-act="cam" data-v="right" aria-label="Повернути праворуч">⟳</button>
+          <button data-act="cam" data-v="tilt" aria-label="Нахил">◩</button><button data-act="cam" data-v="reset" aria-label="Скинути камеру">⌂</button>
+          <button data-act="toggle3d" aria-label="2D-мапа">2D</button>
+        </div>
+        ${sel ? `<div class="sheet">${lotPanel(sel)}</div>` : ''}</div>`;
+    }
+    let html = `<div class="row between"><h1>Мапа міста</h1>${typeof City3D !== 'undefined' && City3D.ok() ? '<button class="btn sm" data-act="toggle3d">🏙️ 3D</button>' : ''}</div><p class="muted">Оберіть приміщення. <span class="lg own"></span> ваші · <span class="lg npc"></span> конкуренти · <span class="lg free"></span> вільні</p><div class="map">`;
     for (const d of DISTRICTS) {
       html += `<div class="district" style="--dc:${d.color}"><div class="dh"><b>${d.name}</b><small>Потік ${d.traffic} · Оренда ×${d.rent}</small></div><div class="lots">`;
       for (const l of state.lots.filter((x) => x.district === d.id)) {
@@ -681,7 +697,7 @@ const VIEWS = {
   },
 
   businesses() {
-    if (!state.biz.length) return `<h1>Бізнеси</h1><div class="card hero"><p>У вас ще немає бізнесів.</p><button class="btn primary" data-act="nav" data-v="map">🗺️ Обрати приміщення</button></div>`;
+    if (!state.biz.length) return `<h1>Бізнеси</h1><div class="card hero"><p>У вас ще немає бізнесів.</p><button class="btn primary" data-act="nav" data-v="map">🏙️ Обрати приміщення</button></div>`;
     return `<h1>Бізнеси</h1><div class="cards">${state.biz.map((b) => {
       const T = TYPES[b.type];
       return `<div class="card bizcard click" data-act="biz" data-id="${b.id}">
@@ -700,7 +716,7 @@ const VIEWS = {
     const tabs = [['overview', 'Огляд'], ['products', 'Товари'], ['staff', 'Персонал'], ['marketing', 'Маркетинг'], ['upgrades', 'Покращення']];
     const tab = state.ui.tab || 'overview';
     let html = `<button class="btn ghost" data-act="nav" data-v="businesses">← Усі бізнеси</button>
-      <div class="bizhead"><span class="big">${T.icon}</span><div><h1>${esc(b.name)} <button class="btn ghost sm" data-act="rename" data-id="${b.id}" aria-label="Перейменувати">✏️</button></h1>
+      <div class="bizhead"><span class="big">${T.icon}</span><div><h1>${esc(b.name)} <button class="btn ghost sm" data-act="rename" data-id="${b.id}" aria-label="Перейменувати">✏️</button> <button class="btn ghost sm" data-act="showOnMap" data-id="${b.id}" aria-label="Показати в місті">📍</button></h1>
       <small>${T.name} · ${DMAP[lot.district].name}, ${esc(lot.addr)} · ${SIZES[lot.size].name} (${SIZES[lot.size].m2} м²)</small></div>${bizStatus(b)}</div>
       <div class="tabs">${tabs.map(([id, n]) => `<button class="${tab === id ? 'on' : ''}" data-act="tab" data-v="${id}">${n}</button>`).join('')}</div>`;
     html += BIZ_TABS[tab](b);
@@ -769,6 +785,8 @@ const VIEWS = {
       <li>Щонеділі сплачується податок 12% від тижневого прибутку. Готівка нижче −$10 000 = банкрутство.</li></ul></div>`;
   },
 };
+
+function use3D() { return !state.ui.no3d && typeof City3D !== 'undefined' && City3D.ok(); }
 
 function skillDots(s) { return `<span class="skill" title="${s.toFixed(1)}">${'●'.repeat(Math.round(s))}${'○'.repeat(5 - Math.round(s))}</span> <small>${s.toFixed(1)}</small>`; }
 
@@ -890,7 +908,10 @@ function startPrompt(canCancel) {
 const ACT = {
   nav: (d) => { state.ui.view = d.v; window.scrollTo(0, 0); },
   speed: (d) => setSpeed(+d.v),
-  selLot: (d) => { state.ui.lot = d.id || null; if (d.id) setTimeout(() => { const p = document.getElementById('lotpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); },
+  cam: (d) => City3D.control(d.v),
+  toggle3d: () => { state.ui.no3d = !state.ui.no3d; },
+  showOnMap: (d) => { const b = bizById(d.id); state.ui.view = 'map'; state.ui.lot = b.lotId; if (use3D()) City3D.focus(b.lotId); },
+  selLot: (d) => { state.ui.lot = d.id || null; if (d.id && !use3D()) setTimeout(() => { const p = document.getElementById('lotpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); },
   openBiz: (d) => openBusiness(d.lot, d.type),
   biz: (d) => { state.ui.view = 'biz'; state.ui.bizId = d.id; state.ui.tab = 'overview'; window.scrollTo(0, 0); },
   tab: (d) => { state.ui.tab = d.v; },
