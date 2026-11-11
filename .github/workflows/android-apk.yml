@@ -1,0 +1,52 @@
+name: Build APK (Бізнес Імперія)
+
+on:
+  push:
+    paths:
+      - 'business-manager/**'
+      - 'android/**'
+      - '.github/workflows/android-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          mkdir -p ../dist
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist/BizImperia.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BizImperia-apk
+          path: dist/BizImperia.apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-build-${{ github.run_number }}
+          name: Бізнес Імперія — збірка ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          body: |
+            APK гри «Бізнес Імперія» (гілка `${{ github.ref_name }}`).
+            Завантажте `BizImperia.apk` на телефон і встановіть (дозвольте встановлення з невідомих джерел).
+          files: dist/BizImperia.apk
