@@ -19,6 +19,7 @@ const viewCity = () => (state.ui.mapCity && state.unlocked && state.unlocked[sta
 // ================= Нова гра =================
 function newGame(o = {}) {
   if (CITIES.mycity) delete CITIES.mycity;
+  if (typeof LEAGUES !== 'undefined' && LEAGUES.own) delete LEAGUES.own;
   const C = CITIES[o.city] || CITIES.kyiv;
   state = {
     v: 2, company: o.company || 'Моя компанія', city: o.city || 'kyiv',
@@ -997,6 +998,7 @@ function unlockCity(cid) {
 /** Сумісність зі старими збереженнями (одне місто). */
 function migrateState() {
   if (state.cities && state.cities.custom && typeof restoreCustomCity === 'function') restoreCustomCity(state.cities.custom);
+  if (state.sport && state.sport.clubs && state.sport.clubs.ownLeague && typeof restoreOwnLeague === 'function') restoreOwnLeague(state.sport.clubs.ownLeague);
   if (!state.difficulty) state.difficulty = 'normal';
   if (typeof worldState === 'function') worldState();
   if (typeof govState === 'function') govState();
@@ -1011,6 +1013,8 @@ function migrateState() {
   if (typeof warState === 'function') warState();
   if (typeof sciState === 'function') sciState();
   if (typeof cityState === 'function') cityState();
+  if (typeof lifeState === 'function') lifeState();
+  if (typeof clubsState === 'function') clubsState();
 }
 
 // ================= Поглинання компаній =================
@@ -1154,7 +1158,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) + (typeof infraValue === 'function' ? infraValue() : 0) - debt(); }
+function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) + (typeof infraValue === 'function' ? infraValue() : 0) + (typeof luxuryValue === 'function' ? luxuryValue() : 0) + (typeof clubsValue === 'function' && state.sport ? clubsValue() : 0) - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }

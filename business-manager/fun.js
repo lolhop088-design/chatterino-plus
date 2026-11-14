@@ -160,7 +160,7 @@ function dropTeam(id) {
 /** Множник відвідуваності магазинів від спонсорства та перемог. */
 function sponsorTraffic() {
   if (!state.sport) return 1;
-  const aw = sum(myTeams(), (t) => (t.reach / 1e6) * (0.5 + t.strength / 100));
+  const aw = sum(state.sport.teams.filter((t) => t.sponsor === 'player' || t.owner === 'player'), (t) => (t.reach / 1e6) * (0.5 + t.strength / 100));
   return 1 + Math.min(0.3, aw * 0.03 + state.sport.hype);
 }
 const racingBoost = () => 1 + 0.12 * myTeams().filter((t) => t.league === 'racing').length;
@@ -185,13 +185,13 @@ function sportDaily() {
     book('marketing', -sponsorCost(t) * (1 + t.invest));
     if (t.invest > 0) t.strength = Math.min(99, t.strength + 0.08 * t.invest);
   }
-  for (const t of S.teams) if (t.sponsor !== 'player') t.strength = clamp(t.strength + rnd(-0.15, 0.15), 30, 95);
+  for (const t of S.teams) if (t.sponsor !== 'player' && t.owner !== 'player') t.strength = clamp(t.strength + rnd(-0.15, 0.15), 30, 95);
   if (state.day % 7 === 0) {
     for (const lg of Object.keys(LEAGUES)) {
       const ts = S.teams.filter((t) => t.league === lg).sort(() => Math.random() - 0.5);
       for (let i = 0; i + 1 < ts.length; i += 2) {
         const a = ts[i], b = ts[i + 1], res = playMatch(a, b);
-        const mine = a.sponsor === 'player' ? a : b.sponsor === 'player' ? b : null;
+        const mine = a.sponsor === 'player' || a.owner === 'player' ? a : b.sponsor === 'player' || b.owner === 'player' ? b : null;
         if (mine) {
           const won = (mine === a && res === 1) || (mine === b && res === -1), drawn = res === 0;
           if (won) S.hype += 0.01;
@@ -207,7 +207,7 @@ function sportDaily() {
       ch.titles++;
       const sp = ch.sponsor === 'player' ? state.company : ch.sponsor ? (coById(ch.sponsor) || {}).name : null;
       news(`🏆 Чемпіон сезону ${S.season} (${LEAGUES[lg].name}): «${ch.name}»${sp ? ` — спонсор ${sp}` : ''}.`, 'city', ch.sponsor === 'player' ? 'good' : '');
-      if (ch.sponsor === 'player') {
+      if (ch.sponsor === 'player' || ch.owner === 'player') {
         S.trophies++; S.hype += 0.05;
         for (const b of state.biz) b.rep = Math.min(100, b.rep + 5);
         log(`🏆 Ваша команда «${ch.name}» — чемпіон! Репутація всіх магазинів +5.`, 'good');

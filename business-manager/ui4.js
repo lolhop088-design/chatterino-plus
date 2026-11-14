@@ -78,8 +78,10 @@ Object.assign(ACT, {
 });
 
 // ---------- Версія, «Що нового», згруповане меню ----------
-const GAME_VERSION = '3.0 · етап 6';
+const GAME_VERSION = '3.0 · етап 7';
 const WHATS_NEW = [
+  ['personal', '🧑‍💼', 'Особистий кабінет', 'вік і здоров’я, сім’я й діти, розкіш, подорожі, спадкоємці й покоління'],
+  ['clubs', '⚽', 'Спортивна імперія', 'власні клуби, склад, трансфери, стадіони, власна ліга, міжнародний кубок'],
   ['science', '🔬', 'Наука', 'дерево технологій, дослідницькі центри, патенти, власні смартфони'],
   ['citydev', '🏗️', 'Розвиток міст', 'аеропорти, порти, мости, залізниця, населення, власне місто'],
   ['divisions', '🏢', 'Галузі', 'телеком, авіа, готелі, страхування, будівництво, фарма, космос'],
@@ -93,7 +95,7 @@ const NAV_GROUPS = [
   ['Конкуренція', ['rivals', 'corpwar', 'antitrust']],
   ['Світ і міста', ['world', 'regions', 'citydev', 'newsroom', 'news']],
   ['Влада й вплив', ['politics', 'gov', 'media', 'underworld', 'security']],
-  ['Особисте', ['life', 'sponsor', 'achievements', 'settings', 'admin']],
+  ['Особисте', ['personal', 'clubs', 'life', 'sponsor', 'achievements', 'settings', 'admin']],
 ];
 ACT.more = () => {
   const byId = Object.fromEntries(NAV.map((x) => [x[0], x]));
