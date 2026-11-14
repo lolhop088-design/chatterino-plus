@@ -299,3 +299,4 @@ tr.mine td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .termkpi .kpi span { font-size: 10px; line-height: 1.2; display: block; }
 .termkpi .kpi b { font-size: 16px; }
 @media (max-width: 700px) { .termkpi { grid-template-columns: repeat(3, minmax(0, 1fr)); } .termkpi .kpi small { display: none; } }
+.tabs { flex-wrap: wrap; row-gap: 2px; }

@@ -768,7 +768,7 @@ function staffDaily() {
 }
 
 // ================= Банк =================
-const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12 + (state.difficulty ? diff().rate : 0);
+const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12 + (state.difficulty ? diff().rate : 0) + (typeof holdingRate === 'function' ? holdingRate() : 0);
 function creditLimit() {
   const assets = state.cash + inventoryValue() + fixedAssets() + sum(state.props.filter((p) => p.owned && !p.mortgage), propValue);
   return Math.max(0, Math.round(Math.max(5000 * priceLvl(), assets * 0.5) * clamp(state.me.credit / 700, 0.4, 1.2) - debt()));
@@ -974,6 +974,7 @@ function playerInfluenceParts(co) {
   if (co.sector === 'bank' && state.bank && state.bank.deposits > 0) { const k = Math.min(0.5, state.bank.deposits / (2e9 * priceLvl())); f *= 1 - k; parts.push(`ваш банк забрав ${Math.round(k * 100)}% ринку`); }
   const c = state.contracts && state.contracts[co.id];
   if (c && c.day >= state.day - 1) { f *= 1.03; parts.push('купує у вас за контрактом (+)'); }
+  if (typeof warInfluence === 'function') f *= warInfluence(co, parts);
   return { factor: clamp(f, 0.3, 1.2), parts };
 }
 
@@ -1003,6 +1004,8 @@ function migrateState() {
   if (typeof mediaState === 'function') mediaState();
   if (typeof crimeState === 'function') crimeState();
   if (typeof polState === 'function') polState();
+  if (typeof corpState === 'function') corpState();
+  if (typeof warState === 'function') warState();
 }
 
 // ================= Поглинання компаній =================
@@ -1146,7 +1149,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) - debt(); }
+function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }
@@ -1331,7 +1334,7 @@ function endOfDay() {
   state.led = {};
   if (state.day % 7 === 0) {
     const wk = sum(state.ledger.slice(-7), (x) => x.profit - (x.salary || 0));
-    if (wk > 0) { const tax = wk * state.econ.taxRate * (1 - 0.04 * state.depts.accounting); book('tax', -tax); log(`Сплачено податок на прибуток: ${money(tax)} (${pct(state.econ.taxRate, 0)}).`); }
+    if (wk > 0) { const tax = wk * state.econ.taxRate * (1 - 0.04 * state.depts.accounting) * (typeof holdingTax === 'function' ? holdingTax() : 1); book('tax', -tax); log(`Сплачено податок на прибуток: ${money(tax)} (${pct(state.econ.taxRate, 0)}).`); }
   }
   state.mods = state.mods.filter((m) => --m.days > 0);
   const rev = (L.sales || 0) + (L.b2b || 0) + (L.software || 0) + (L.rentInc || 0);
@@ -1389,6 +1392,9 @@ const ACHIEVEMENTS = [
   { id: 'mayor', icon: '🏙️', name: 'Мер', desc: 'Виграйте вибори мера', check: (s) => !!(s.pol && s.pol.me.posts.some((p) => p.startsWith('mayor:'))) },
   { id: 'president', icon: '🎖️', name: 'Президент', desc: 'Станьте президентом країни', check: (s) => !!(s.pol && s.pol.me.office === 'president') },
   { id: 'fortress', icon: '🛡️', name: 'Фортеця', desc: 'Цілодобова охорона на всіх об’єктах і елітна особиста охорона', check: (s) => !!(s.crime && s.crime.guard === 3 && [...s.biz, ...s.fac].length >= 3 && [...s.biz, ...s.fac].every((u) => u.sec === 3)) },
+  { id: 'conglomerate', icon: '🏢', name: 'Конгломерат', desc: 'Підрозділи в 3 різних галузях', check: (s) => !!(s.corp && new Set(s.corp.divs.map((d) => d.ind)).size >= 3) },
+  { id: 'pharma', icon: '💊', name: 'Блокбастер', desc: 'Отримайте схвалення власного препарату', check: (s) => !!(s.corp && s.corp.drugs.some((x) => x.approved)) },
+  { id: 'orbit', icon: '🛰️', name: 'Орбіта', desc: 'Виведіть власний супутник на орбіту', check: (s) => !!(s.corp && s.corp.sats.length) },
   { id: 'banker', icon: '🏦', name: 'Банкір', desc: 'Отримайте банківську ліцензію', check: (s) => !!s.bank },
   { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
   { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },
