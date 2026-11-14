@@ -52,25 +52,49 @@ const coById = (id) => state.companies.find((c) => c.id === id);
 const aliveCos = () => state.companies.filter((c) => c.alive);
 
 function genLots() {
-  const retailCos = (type) => aliveCos().filter((c) => c.sector === type);
-  const facSector = { steel: 'steelmill', oil: 'refinery', energy: 'powerplant', logistics: 'logistics' };
   for (const d of DISTRICTS) {
     for (let i = 0; i < 12; i++) {
       const r = Math.random();
       const size = d.zone === 'industry' ? (r < 0.15 ? 'M' : r < 0.6 ? 'L' : 'XL') : (r < 0.4 ? 'S' : r < 0.75 ? 'M' : 'L');
       const street = pick(d.streets);
       const lot = { id: d.id + i, district: d.id, idx: i, size, addr: street.endsWith('№') ? `${street}${ri(1, 30)}` : `${street}, ${ri(1, 140)}`, npc: null, owner: null, ownerKind: null };
-      if (d.zone === 'retail' && chance(0.35)) {
-        const types = Object.keys(TYPES).filter((t) => (d.id !== 'hills' || t !== 'fastfood') && (!TYPES[t].minSize || SIZE_ORDER.indexOf(size) >= SIZE_ORDER.indexOf(TYPES[t].minSize)));
-        const t = pick(types), cos = retailCos(t);
-        if (cos.length) lot.npc = { co: pick(cos).id, type: t };
-      } else if (d.zone === 'industry' && chance(0.3)) {
-        const co = pick(aliveCos().filter((c) => facSector[c.sector]));
-        lot.npc = { co: co.id, fac: facSector[co.sector] };
-      }
+      populateCompetitor(lot);
       state.lots.push(lot);
     }
   }
+}
+
+/** Із певною ймовірністю віддає вільну ділянку під точку ІІ-компанії відповідної галузі. */
+function populateCompetitor(lot, pRetail = 0.35, pIndustry = 0.3) {
+  const d = DMAP[lot.district];
+  if (d.zone === 'retail' && chance(pRetail)) {
+    const types = Object.keys(TYPES).filter((t) => (d.id !== 'hills' || t !== 'fastfood') && (!TYPES[t].minSize || SIZE_ORDER.indexOf(lot.size) >= SIZE_ORDER.indexOf(TYPES[t].minSize)));
+    const t = pick(types), cos = aliveCos().filter((c) => c.sector === t);
+    if (cos.length) lot.npc = { co: pick(cos).id, type: t };
+  } else if (d.zone === 'industry' && chance(pIndustry)) {
+    const cos = aliveCos().filter((c) => FAC_BY_SECTOR[c.sector]);
+    if (cos.length) { const co = pick(cos); lot.npc = { co: co.id, fac: FAC_BY_SECTOR[co.sector] }; }
+  }
+}
+const FAC_BY_SECTOR = { steel: 'steelmill', oil: 'refinery', energy: 'powerplant', logistics: 'logistics' };
+
+/** Адмін: відроджує збанкрутілі/поглинуті компанії й знову розселяє конкурентів по вільних ділянках. */
+function restoreCompetitors() {
+  let revived = 0, placed = 0;
+  for (const co of state.companies) {
+    if (co.alive) { if (co.cash < 0) co.cash = SECTORS[co.sector].rev * co.scale * 30; continue; }
+    const S = SECTORS[co.sector];
+    co.alive = true; co.fate = null; co.cash = S.rev * co.scale * rnd(20, 60); co.ema = S.rev * co.scale * S.margin;
+    co.price = Math.max(5, (co.ema * 365 * S.pe) / co.shares); co.hist = [co.price];
+    revived++;
+  }
+  for (const l of state.lots) {
+    if (l.owner || l.npc) continue;
+    populateCompetitor(l);
+    if (l.npc) placed++;
+  }
+  news(`🔔 На ринок повернулися конкуренти: ${placed} нових точок у місті.`, 'corp');
+  return { revived, placed };
 }
 
 function genProps() {
@@ -146,7 +170,7 @@ function competitors(b) {
   let s = 0;
   for (const l of state.lots) {
     if (l.district !== lot.district || l === lot) continue;
-    if (l.npc && l.npc.type === b.type) { const co = coById(l.npc.co); s += co ? co.rep : 1; }
+    if (l.npc && l.npc.type === b.type) { const co = coById(l.npc.co); if (!isSub(co)) s += co ? co.rep : 1; }
     if (l.ownerKind === 'biz') { const o = bizById(l.owner); if (o && o.type === b.type) s += 1; }
   }
   return s * modMult('pricewar', b.type);
@@ -818,6 +842,13 @@ function aiDaily() {
     let profit = rev * S.margin * co.eff - S.rev * co.scale * 0.02 * (e.phase === 'crisis' ? 1.5 : 1);
     if (chance(0.01)) profit -= rev * rnd(0.5, 3); // разові збитки
     co.cash += profit;
+    if (isSub(co)) {
+      // Дочірня компанія: частку прибутку (або збитку) отримує власник.
+      const pay = profit * (co.payout == null ? 1 : co.payout);
+      co.cash -= pay;
+      book('subsidiary', pay);
+      co.subToday = pay;
+    }
     co.ema = co.ema * 0.95 + profit * 0.05;
     const fair = Math.max(0.3, (Math.max(0, co.ema) * 365 * S.pe * ph.pe + co.cash * 0.3) / co.shares);
     co.price = Math.max(0.05, co.price * Math.exp(gauss() * 0.018) + (fair - co.price) * 0.03);
@@ -834,9 +865,12 @@ function aiDaily() {
       const l = pick(state.lots.filter((x) => x.npc && x.npc.co === co.id)); l.npc = null;
       news(`«${co.name}» закриває збиткову точку в районі «${DMAP[l.district].name}».`, 'corp');
     }
-    if (co.cash < -2.5e6 * co.scale) bankruptCompany(co);
+    if (co.cash < -2.5e6 * co.scale) {
+      if (isSub(co)) log(`⚠️ Дочірня «${co.name}» збанкрутувала — ви втратили компанію.`, 'bad');
+      bankruptCompany(co);
+    }
     // дивіденди
-    if (state.day % 30 === 0 && co.ema > 0) {
+    if (state.day % 30 === 0 && co.ema > 0 && !isSub(co)) {
       const dps = co.ema * 30 * 0.35 / co.shares;
       const h = state.portfolio[co.id];
       if (h && h.qty) { const d = h.qty * dps; book('dividends', d); log(`Дивіденди від «${co.name}»: ${money(d, 2)}.`, 'good'); }
@@ -844,19 +878,23 @@ function aiDaily() {
     }
   }
   // поглинання
-  if (chance(0.006)) {
-    const buyers = aliveCos().filter((c) => c.cash > 4e6);
+  // Поглинання між ІІ-компаніями: частіше в межах галузі, іноді — конгломерати з інших галузей.
+  if (chance(0.025)) {
+    const buyers = aliveCos().filter((c) => c.cash > 3e6 && !isSub(c));
     if (buyers.length) {
       const b = pick(buyers);
-      const targets = aliveCos().filter((c) => c !== b && c.sector === b.sector && c.price * c.shares * 1.3 < b.cash);
+      const affordable = aliveCos().filter((c) => c !== b && !isSub(c) && c.price * c.shares * 1.3 < b.cash);
+      const same = affordable.filter((c) => c.sector === b.sector);
+      const targets = same.length && chance(0.7) ? same : affordable;
       if (targets.length) {
         const t = pick(targets), prem = t.price * 1.3;
+        b.acquired = (b.acquired || []).concat(t.name).slice(-6);
         b.cash -= prem * t.shares;
         for (const l of state.lots) if (l.npc && l.npc.co === t.id) l.npc.co = b.id;
         const h = state.portfolio[t.id];
         if (h && h.qty) { book('shares', h.qty * prem); log(`Ваші акції «${t.name}» викуплено з премією: ${money(h.qty * prem)}.`, 'good'); delete state.portfolio[t.id]; }
         t.alive = false; t.fate = `поглинута «${b.name}»`;
-        news(`🤝 «${b.name}» поглинає «${t.name}» за ${moneyK(prem * t.shares)}.`, 'corp');
+        news(`🤝 «${b.name}» поглинає «${t.name}»${t.sector !== b.sector ? ` (${SECTORS[t.sector].name})` : ''} за ${moneyK(prem * t.shares)}.`, 'corp');
       }
     }
   }
@@ -877,6 +915,80 @@ function aiDaily() {
   }
   if (state.ipo) ipoDaily();
 }
+// ================= Поглинання компаній =================
+const isSub = (co) => !!co && co.owner === 'player';
+const coMcap = (co) => co.price * co.shares;
+const subsidiaries = () => state.companies.filter((c) => c.alive && isSub(c));
+const subsidiariesValue = () => sum(subsidiaries(), coMcap);
+/** Ціна викупу: премія 30% до ринку; вже куплені акції зараховуються. */
+function takeoverPrice(co) {
+  const h = state.portfolio[co.id];
+  const owned = h ? Math.min(h.qty, co.shares) : 0;
+  return Math.round(co.price * 1.3 * (co.shares - owned));
+}
+function acquireCompany(id) {
+  const co = coById(id);
+  if (!co || !co.alive || isSub(co)) return;
+  const price = takeoverPrice(co);
+  if (state.cash < price) return toast(`Для поглинання потрібно ${moneyK(price)}.`, 'bad');
+  book('shares', -price);
+  delete state.portfolio[co.id];
+  co.owner = 'player'; co.payout = 1; co.boughtFor = price; co.boughtDay = state.day;
+  const shops = state.lots.filter((l) => l.npc && l.npc.co === co.id).length;
+  news(`🤝 ${state.company} поглинає «${co.name}» за ${moneyK(price)}.`, 'corp', 'good');
+  log(`🤝 Поглинуто «${co.name}» (${SECTORS[co.sector].name}, ${shops} точок у місті) за ${money(price)}.`, 'good');
+  checkAchievements();
+}
+function sellSubsidiary(id) {
+  const co = coById(id);
+  if (!isSub(co)) return;
+  const v = Math.round(coMcap(co) * 0.95);
+  book('assetSale', v);
+  co.owner = null; co.payout = null;
+  news(`«${co.name}» знову незалежна: ${state.company} продала компанію за ${moneyK(v)}.`, 'corp');
+  log(`Продано дочірню «${co.name}» за ${money(v)}.`, 'good');
+}
+function companyRanking() {
+  const rows = aliveCos().map((c) => ({ co: c, name: c.name, cap: coMcap(c), profit: c.ema, shops: state.lots.filter((l) => l.npc && l.npc.co === c.id).length, sector: SECTORS[c.sector].name }));
+  rows.push({ me: true, name: state.company, cap: state.ipo ? state.ipo.price * state.ipo.shares : netWorth(), profit: avgProfit(7), shops: state.biz.length + state.fac.length, sector: 'Ваша корпорація' });
+  return rows.sort((a, b) => b.cap - a.cap);
+}
+
+// ================= Контракти: ІІ-компанії купують продукцію ваших заводів =================
+const CONTRACT_DEMAND = {
+  grocery: ['bread', 'dairy', 'veg'], coffee: ['bread', 'dairy'], fastfood: ['bread', 'veg'], restaurant: ['dairy', 'veg', 'bread'],
+  fashion: ['clothes', 'cotton'], electronics: ['electronics', 'chips'], dealership: ['steel', 'plastic', 'chips'], tech: ['chips', 'electronics'],
+  energy: ['oil'], steel: ['ore'], oil: ['plastic'], logistics: ['oil'], flowers: [], bank: [],
+};
+const contractPrice = (g) => mktPrice(g) * 1.08 * (1 + 0.025 * state.depts.sales);
+function contractsDaily() {
+  if (state.flags.noContracts) return 0;
+  state.contracts = state.contracts || {};
+  let total = 0;
+  for (const co of aliveCos()) {
+    if (isSub(co)) continue;
+    const goods = (CONTRACT_DEMAND[co.sector] || []).filter((g) => whQty(g) > 0);
+    if (!goods.length) continue;
+    const budget = SECTORS[co.sector].rev * co.scale * 0.04 * priceLvl() * state.econ.demand / goods.length;
+    for (const g of goods) {
+      const reserve = state.autoSell[g] ? state.autoSell[g].keep : 0;
+      const price = contractPrice(g);
+      const qty = Math.floor(Math.min(whQty(g) - reserve, budget / price));
+      if (qty <= 0) continue;
+      whTake(g, qty);
+      const v = qty * price;
+      book('b2b', v); book('transport', -transportCost(g, qty) * 0.5);
+      const c = state.contracts[co.id] || (state.contracts[co.id] = { name: co.name, total: 0, today: 0, goods: {} });
+      c.total += v; c.today = (c.day === state.day ? c.today : 0) + v; c.day = state.day;
+      c.goods[g] = (c.goods[g] || 0) + qty;
+      co.cash -= v * 0.2; // частина закупівлі — витрата компанії-клієнта
+      total += v;
+    }
+  }
+  if (total > 0) log(`📑 Контракти: компанії купили вашої продукції на ${money(total)}.`, 'good');
+  return total;
+}
+
 function bankruptCompany(co) {
   co.alive = false; co.fate = 'банкрут';
   for (const l of state.lots) if (l.npc && l.npc.co === co.id) l.npc = null;
@@ -887,6 +999,7 @@ function bankruptCompany(co) {
 function buyShares(id, qty) {
   const co = coById(id); qty = Math.floor(qty);
   if (!co || !co.alive || qty <= 0) return;
+  if (isSub(co)) return toast('Це вже ваша дочірня компанія.', 'bad');
   const c = qty * co.price * 1.003;
   if (state.cash < c) return toast('Недостатньо коштів.', 'bad');
   book('shares', -c);
@@ -933,7 +1046,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() - debt(); }
+function netWorth() { return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }
@@ -1095,6 +1208,7 @@ function endOfDay() {
   for (const f of state.fac) facDaily(f, 'power');
   for (const f of state.fac) facDaily(f, 'other');
   if (powerPool > 0) { book('power', powerPool * state.econ.power * priceLvl() * 0.7); powerPool = 0; }
+  contractsDaily();
   for (const [g, s] of Object.entries(state.autoSell)) if (s && s.on && whQty(g) > s.keep) marketSell(g, whQty(g) - s.keep, true);
   projectsDaily();
   propsDaily();
@@ -1163,6 +1277,8 @@ const ACHIEVEMENTS = [
   { id: 'investor', icon: '📊', name: 'Інвестор', desc: 'Акції 5 різних компаній', check: (s) => Object.keys(s.portfolio).length >= 5 },
   { id: 'corp', icon: '🏛️', name: 'Корпорація', desc: 'Усі 6 відділів працюють', check: (s) => Object.values(s.depts).every((v) => v > 0) },
   { id: 'ipo', icon: '🔔', name: 'Публічна компанія', desc: 'Проведіть IPO', check: (s) => !!s.ipo },
+  { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
+  { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },
   { id: 'debt_free', icon: '🏦', name: 'Без боргів', desc: 'Повністю погасіть кредит', check: (s) => s.flags.repaid },
   { id: 'nw1m', icon: '👑', name: 'Мільйонер', desc: 'Чистий капітал $1 млн', check: () => netWorth() >= 1e6 },
   { id: 'nw10m', icon: '💎', name: 'Національна корпорація', desc: 'Чистий капітал $10 млн', check: () => netWorth() >= 1e7 },

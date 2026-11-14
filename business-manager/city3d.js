@@ -246,7 +246,7 @@ const City3D = (() => {
     if (l.ownerKind === 'biz') { const b = bizById(l.owner); return b ? `b:${b.type}:${b.upg.interior}:${b.name}` : 'x'; }
     if (l.ownerKind === 'fac') { const f = facById(l.owner); return f ? `f:${f.kind}:${f.level}:${f.name}:${f.broken ? 1 : 0}` : 'x'; }
     if (l.ownerKind === 'prop') { const p = propById(l.owner); return p ? `p:${p.kind}:${p.building ? 1 : 0}` : 'x'; }
-    if (l.npc) return `n:${l.npc.co}:${l.npc.type || l.npc.fac}`;
+    if (l.npc) return `n:${l.npc.co}:${l.npc.type || l.npc.fac}:${isSub(coById(l.npc.co)) ? 1 : 0}`;
     return `free:${Math.round(Math.log(lotRent(l)) * 8)}`;
   }
   function addShape(gb, shape, w, d, lvl, face, own, color) {
@@ -322,7 +322,7 @@ const City3D = (() => {
       gb.box(1.6, 2.4, 0.1, 0, 0, p.face * (d / 2 + 0.03), '#2a2f38');
       if (type === 'dealership') for (let i = 0; i < 3; i++) gb.box(1.3, 0.8, 2.4, -w / 2 + 1.5 + i * 2.4, 0, p.face * (d / 2 + 2.6), ['#d64a3a', '#f2f2f2', '#2f7fd6'][i]);
       if (own) { gb.ring(Math.max(w, d) * 0.75, Math.max(w, d) * 0.82, 0, 0.05, 0, '#4cc27c'); const b = bizById(l.owner); lbl = label(`${T.icon} ${b.name.length > 18 ? b.name.slice(0, 17) + '…' : b.name}`, { bg: 'rgba(30,110,64,.92)', border: '#bff0cf', font: 28, scale: 0.9 }); }
-      else { const co = coById(l.npc.co); lbl = label(`${T.icon} ${co ? co.name : ''}`, { bg: 'rgba(150,56,48,.85)', font: 24, scale: 0.65, near: true }); }
+      else { const co = coById(l.npc.co); const sub = isSub(co); lbl = label(`${T.icon} ${co ? co.name : ''}${sub ? ' · ваша' : ''}`, { bg: sub ? 'rgba(30,110,64,.92)' : 'rgba(150,56,48,.85)', font: 24, scale: sub ? 0.75 : 0.65, near: !sub }); }
       top = h + 2.6;
     } else if (key.startsWith('f:') || (l.npc && l.npc.fac)) {
       const own = key.startsWith('f:');
@@ -332,7 +332,7 @@ const City3D = (() => {
       gb.box(w, 0.1, d, 0, 0, 0, '#8b8a85');
       const h = addShape(gb, F.shape, w, d, lvl, p.face, own, own ? null : '#a49d93');
       if (own) { gb.ring(Math.max(w, d) * 0.72, Math.max(w, d) * 0.78, 0, 0.12, 0, '#4cc27c'); const f = facById(l.owner); lbl = label(`${F.icon} ${f.name.length > 20 ? f.name.slice(0, 19) + '…' : f.name}`, { bg: f.broken ? 'rgba(180,50,40,.92)' : 'rgba(30,110,64,.92)', border: '#bff0cf', font: 26, scale: 0.85 }); }
-      else { const co = coById(l.npc.co); lbl = label(`${F.icon} ${co ? co.name : ''}`, { bg: 'rgba(90,90,100,.85)', font: 24, scale: 0.65, near: true }); }
+      else { const co = coById(l.npc.co); const sub = isSub(co); lbl = label(`${F.icon} ${co ? co.name : ''}${sub ? ' · ваша' : ''}`, { bg: sub ? 'rgba(30,110,64,.92)' : 'rgba(90,90,100,.85)', font: 24, scale: sub ? 0.75 : 0.65, near: !sub }); }
       top = h + 2.5;
     } else if (key.startsWith('p:')) {
       const pr = propById(l.owner);

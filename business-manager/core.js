@@ -349,6 +349,7 @@ const LEDGER = {
   power: { name: 'Продаж електроенергії', kind: 'inc' },
   salary: { name: 'Зарплата (особиста)', kind: 'inc' },
   dividends: { name: 'Дивіденди', kind: 'inc' },
+  subsidiary: { name: 'Прибуток дочірніх компаній', kind: 'inc' },
   interestInc: { name: 'Відсотки на рахунку', kind: 'inc' },
   purchases: { name: 'Закупівлі товарів і сировини', kind: 'exp' },
   wages: { name: 'Зарплати персоналу', kind: 'exp' },

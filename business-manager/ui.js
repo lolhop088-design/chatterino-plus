@@ -41,7 +41,7 @@ function avatarSVG(look, size = 40) {
 const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
-  ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
+  ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
   ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
@@ -220,7 +220,7 @@ const VIEWS = {
     for (const d of DISTRICTS) {
       html += `<div class="district" style="--dc:${d.color}"><div class="dh"><b>${d.name}</b><small>${d.zone === 'industry' ? 'Промислова зона' : 'Потік ' + d.traffic} · оренда ×${d.rent}</small></div><div class="lots">`;
       for (const l of state.lots.filter((x) => x.district === d.id)) {
-        const cls = l.owner ? 'own' : l.npc ? 'npc' : 'free';
+        const cls = l.owner || (l.npc && isSub(coById(l.npc.co))) ? 'own' : l.npc ? 'npc' : 'free';
         html += `<button class="lot ${cls} ${sel === l ? 'sel' : ''}" data-act="selLot" data-id="${l.id}" title="${esc(l.addr)}"><span>${lotIcon(l)}</span><small>${l.size}</small></button>`;
       }
       html += '</div></div>';
@@ -271,6 +271,10 @@ const VIEWS = {
     } else if (tab === 'warehouse') {
       const goods = Object.entries(state.wh.goods);
       html += `<div class="card"><p>Заповненість: <b>${Math.round(whUsed()).toLocaleString('uk-UA')}</b> / ${whCap().toLocaleString('uk-UA')} (вагових од.)</p>${bar(whUsed(), whCap(), whUsed() / whCap() > 0.9 ? 'bad' : 'good')}<p class="muted">Логістичні центри збільшують склад на 100 000 і здешевлюють перевезення на 30%.</p></div>`;
+      const clients = Object.entries(state.contracts || {}).sort((a, b) => b[1].total - a[1].total).slice(0, 10);
+      html += `<div class="card"><h3>📑 Контракти з компаніями</h3><p class="muted">Конкуренти щодня купують продукцію з вашого складу за ціною на 8% вищою за ринкову (з урахуванням відділу продажів): мережі — хліб, молочку, овочі; автовиробники — сталь, пластик, мікросхеми; техкомпанії — електроніку. Запас «лишати» з автопродажу не продається.</p>
+        <label class="switch"><input type="checkbox" data-change="contracts" ${state.flags.noContracts ? '' : 'checked'}> Продавати компаніям за контрактами</label>
+        ${clients.length ? `<div class="table-wrap"><table><thead><tr><th>Клієнт</th><th>Купує</th><th>Усього</th></tr></thead><tbody>${clients.map(([, c]) => `<tr><td>${esc(c.name)}</td><td>${Object.keys(c.goods).map((g) => GOODS[g].icon).join(' ')}</td><td>${moneyK(c.total)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Поки немає закупівель: побудуйте завод, і компанії відповідних галузей почнуть купувати.</p>'}</div>`;
       if (!goods.length) html += `<div class="card"><p class="muted">Склад порожній. Продукція заводів і закупівлі з ринку з’являться тут.</p></div>`;
       else html += `<div class="table-wrap card"><table><thead><tr><th>Товар</th><th>К-сть</th><th>Собівартість</th><th>Ринок</th><th>Продати</th><th>Автопродаж</th></tr></thead><tbody>${goods.map(([g, x]) => {
         const car = g.startsWith('car:');
@@ -477,6 +481,32 @@ const VIEWS = {
     }).join('')}</div>`;
   },
 
+  ranking() {
+    const rows = companyRanking();
+    const myRank = rows.findIndex((x) => x.me) + 1;
+    const subs = subsidiaries();
+    const sector = state.ui.rankSector || 'all';
+    const sectors = ['all', 'subs', ...new Set(aliveCos().map((c) => c.sector))];
+    let html = `<h1>🥇 Топ компаній</h1><div class="kpis">${kpi('Ваше місце', '#' + myRank, myRank <= 3 ? 'pos' : '', `з ${rows.length}`)}${kpi('Ваша вартість', moneyK(rows[myRank - 1].cap))}${kpi('Дочірніх компаній', subs.length)}${kpi('Їхній прибуток/день', money(sum(subs, (c) => c.subToday || 0)), sum(subs, (c) => c.subToday || 0) < 0 ? 'neg' : 'pos')}${kpi('Готівка', moneyK(state.cash))}</div>
+      <div class="card"><p class="muted">Поглинання — викуп 100% компанії з премією 30% до ринкової капіталізації (ваші акції цієї компанії зараховуються). Дочірні компанії не конкурують з вашими магазинами, їхні точки в місті стають вашими, а прибуток надходить вам (частку виплати можна змінити). Збиткова дочірня компанія тягне вас у мінус і може збанкрутувати.</p></div>
+      <div class="chips filter">${sectors.map((s) => `<button class="chip ${sector === s ? 'on' : ''}" data-act="rankSector" data-v="${s}">${s === 'all' ? 'Усі' : s === 'subs' ? 'Мої дочірні' : SECTORS[s].name}</button>`).join('')}</div><div class="card stocklist">`;
+    rows.forEach((r, i) => {
+      if (sector === 'subs' && !(r.co && isSub(r.co))) return;
+      if (sector !== 'all' && sector !== 'subs' && (!r.co || r.co.sector !== sector)) return;
+      const sub = r.co && isSub(r.co);
+      let actions = '';
+      if (sub) {
+        const p = r.co.payout == null ? 1 : r.co.payout;
+        actions = `<div class="trade"><span class="muted">Виплата прибутку:</span>${[[1, '100%'], [0.5, '50%'], [0, '0% (розвиток)']].map(([v, l]) => `<button class="chip ${p === v ? 'on' : ''}" data-act="payout" data-id="${r.co.id}" data-v="${v}">${l}</button>`).join('')}<button class="btn sm danger" data-act="sellSub" data-id="${r.co.id}">Продати за ${moneyK(coMcap(r.co) * 0.95)}</button></div>`;
+      } else if (r.co) {
+        const tp = takeoverPrice(r.co);
+        actions = `<div class="trade"><button class="btn sm primary" ${state.cash < tp ? 'disabled' : ''} data-act="acquire" data-id="${r.co.id}">🦈 Поглинути за ${moneyK(tp)}</button>${state.portfolio[r.co.id] ? `<small class="muted">у вас ${state.portfolio[r.co.id].qty} акцій</small>` : ''}</div>`;
+      }
+      html += `<div class="stock ${r.me || sub ? 'mine' : ''}"><div><b>#${i + 1} ${esc(r.name)}</b>${r.me ? ' <span class="tag good">ви</span>' : sub ? ' <span class="tag good">дочірня</span>' : ''}<br><small>${r.sector} · точок у місті: ${r.shops} · прибуток ${money(r.profit)}/день${r.co && r.co.acquired ? ` · поглинула: ${r.co.acquired.map(esc).join(', ')}` : ''}${r.co && state.contracts && state.contracts[r.co.id] ? ` · ваш клієнт (${moneyK(state.contracts[r.co.id].total)})` : ''}</small></div><div class="px"><b>${moneyK(r.cap)}</b><br><small class="muted">капіталізація</small></div>${r.co ? spark(r.co.hist.slice(-30)) : '<span></span>'}${actions}</div>`;
+    });
+    return html + '</div>';
+  },
+
   admin() {
     const e = state.econ;
     const units = [...state.biz, ...state.fac];
@@ -493,7 +523,7 @@ const VIEWS = {
       <div class="card"><h3>🏷️ Ціни в магазинах</h3>${state.biz.length ? state.biz.map((b) => `<details ${state.ui.admOpen === b.id ? 'open' : ''}><summary data-act="admOpen" data-id="${b.id}"><b>${TYPES[b.type].icon} ${esc(b.name)}</b></summary><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Ціна</th><th>Запас</th></tr></thead><tbody>${productsOf(b).map((p) => { const st = b.products[p.id] || {}; return `<tr><td>${esc(p.name)}</td><td><input type="number" step="0.1" min="0.01" value="${(st.price || 0).toFixed(2)}" data-change="price" data-id="${b.id}" data-p="${p.id}" style="width:100px"></td><td><input type="number" min="0" value="${Math.floor(st.stock || 0)}" data-change="admStock" data-id="${b.id}" data-p="${p.id}" style="width:100px"></td></tr>`; }).join('')}</tbody></table></div>
         <div class="row wrap">${btn('admPrices', 'Усі ціни +10%', `data-id="${b.id}" data-v="1.1"`, '')}${btn('admPrices', 'Усі ціни −10%', `data-id="${b.id}" data-v="0.9"`, '')}${btn('admPrices', 'Ринкові ціни', `data-id="${b.id}" data-v="0"`, '')}</div></details>`).join('') : '<p class="muted">Немає магазинів.</p>'}</div>
       <div class="card"><h3>📦 Ринок B2B (ціна сировини й товарів)</h3><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Множник</th><th>Ціна</th><th>На складі</th></tr></thead><tbody>${Object.entries(GOODS).map(([g, G]) => `<tr><td>${G.icon} ${G.name}</td><td><input type="number" step="0.05" min="0.1" max="10" value="${state.market[g].mult.toFixed(2)}" data-change="admMkt" data-g="${g}" style="width:90px"></td><td>${money(mktPrice(g), 2)}</td><td><input type="number" min="0" value="${Math.floor(whQty(g))}" data-change="admWh" data-g="${g}" style="width:110px"></td></tr>`).join('')}</tbody></table></div></div>
-      <div class="card"><h3>🏢 Бізнеси й підприємства</h3><div class="row wrap">${btn('admRep', 'Репутація всіх магазинів 100')}${btn('admFill', 'Безкоштовно заповнити склади')}${btn('admRepair', 'Відремонтувати все')}${btn('admLevel', 'Усі рівні та покращення на максимум')}${btn('admSkill', 'Персонал: навичка 5, мораль 100')}${btn('admCands', 'Кандидати-профі на ринку праці')}${btn('admNoComp', 'Прибрати конкурентів з міста', '', 'danger')}</div></div>
+      <div class="card"><h3>🏢 Бізнеси й підприємства</h3><div class="row wrap">${btn('admRep', 'Репутація всіх магазинів 100')}${btn('admFill', 'Безкоштовно заповнити склади')}${btn('admRepair', 'Відремонтувати все')}${btn('admLevel', 'Усі рівні та покращення на максимум')}${btn('admSkill', 'Персонал: навичка 5, мораль 100')}${btn('admCands', 'Кандидати-профі на ринку праці')}${btn('admRestoreComp', 'Повернути конкурентів')}${btn('admNoComp', 'Прибрати конкурентів з міста', '', 'danger')}</div></div>
       <div class="card"><h3>📈 Економіка</h3><div class="row wrap">${Object.entries(PHASES).map(([k, P]) => btn('admPhase', P.name, `data-v="${k}"`, e.phase === k ? 'primary' : '')).join('')}</div>
         <div class="row wrap" style="margin-top:8px"><label>Інфляція % <input type="number" step="0.5" value="${e.inflation.toFixed(1)}" data-change="admEcon" data-k="inflation" style="width:100px"></label><label>Ставка ЦБ % <input type="number" step="0.25" value="${e.rate.toFixed(2)}" data-change="admEcon" data-k="rate" style="width:100px"></label><label>Безробіття % <input type="number" step="0.5" value="${e.unemployment.toFixed(1)}" data-change="admEcon" data-k="unemployment" style="width:100px"></label><label>Податок % <input type="number" step="1" value="${Math.round(e.taxRate * 100)}" data-change="admEcon" data-k="tax" style="width:100px"></label></div>
         ${btn('admResetPrices', 'Скинути рівень цін, зарплат і нерухомості до 1.0', '', '')}</div>
@@ -536,7 +566,8 @@ function lotPanel(l) {
   if (l.npc) {
     const co = coById(l.npc.co);
     const what = l.npc.type ? TYPES[l.npc.type] : FACILITIES[l.npc.fac];
-    return html + `<p>Конкурент: <b>${what.icon} ${co ? esc(co.name) : 'Місцевий бізнес'}</b> — ${what.name}.</p>${co && co.alive ? `<p class="muted">Акції ${co.ticker}: ${money(co.price, 2)}</p><button class="btn" data-act="nav" data-v="stocks">📈 На біржу</button>` : ''}</div>`;
+    if (isSub(co)) return html + `<p>${what.icon} Точка вашої дочірньої компанії <b>${esc(co.name)}</b> — ${what.name}.</p><button class="btn primary" data-act="nav" data-v="ranking">🥇 Керувати</button></div>`;
+    return html + `<p>Конкурент: <b>${what.icon} ${co ? esc(co.name) : 'Місцевий бізнес'}</b> — ${what.name}.</p>${co && co.alive ? `<p class="muted">Акції ${co.ticker}: ${money(co.price, 2)} · викуп компанії: ${moneyK(takeoverPrice(co))}</p><div class="row wrap"><button class="btn primary" ${state.cash < takeoverPrice(co) ? 'disabled' : ''} data-act="acquire" data-id="${co.id}">🦈 Поглинути</button><button class="btn" data-act="nav" data-v="ranking">🥇 Топ компаній</button></div>` : ''}</div>`;
   }
   const row = (icon, name, sub, cost, act, extra) => `<div class="typerow"><span class="big">${icon}</span><div><b>${name}</b><br>${sub}<br><small>Старт ${money(cost)}</small></div><button class="btn primary sm" ${state.cash < cost ? 'disabled' : ''} data-act="${act}" data-lot="${l.id}" ${extra}>Відкрити</button></div>`;
   html += '<div class="typelist">';
@@ -769,6 +800,10 @@ const ACT = {
   admPayDebt: () => { for (const l of state.loans) if (l.prop) { const p = propById(l.prop); if (p) p.mortgage = null; } state.loans = []; toast('Усі кредити списано.', 'good'); },
   admCredit: () => { state.me.credit = 850; },
   admPrices: (d) => { const b = bizById(d.id); for (const p of productsOf(b)) { const st = b.products[p.id]; if (st) st.price = +(+d.v ? st.price * +d.v : fairPrice(p)).toFixed(2); } },
+  acquire: (d) => { const co = coById(d.id); confirmBox(`Поглинути «${esc(co.name)}» за ${money(takeoverPrice(co))}?`, () => acquireCompany(d.id)); },
+  sellSub: (d) => { const co = coById(d.id); confirmBox(`Продати дочірню «${esc(co.name)}» за ${money(coMcap(co) * 0.95)}?`, () => sellSubsidiary(d.id)); },
+  payout: (d) => { coById(d.id).payout = +d.v; },
+  rankSector: (d) => { state.ui.rankSector = d.v; },
   admOpen: (d) => { state.ui.admOpen = state.ui.admOpen === d.id ? null : d.id; },
   admRep: () => { for (const b of state.biz) b.rep = 100; },
   admFill: () => { for (const b of state.biz) { ensureProducts(b); const ps = productsOf(b); for (const p of ps) { const st = b.products[p.id]; st.stock = Math.max(st.stock, Math.floor(storageCap(b) * p.share)); } } toast('Склади заповнено.', 'good'); },
@@ -777,6 +812,7 @@ const ACT = {
   admSkill: () => { for (const p of state.staff) { p.skill = 5; p.morale = 100; } },
   admCands: () => { for (const role of Object.keys(ROLES)) for (let i = 0; i < 2; i++) { const c = makeCandidate(); c.role = role; c.skill = 5; c.wage = +(marketWage(c) * 0.9).toFixed(1); state.candidates.unshift(c); } toast('Додано кандидатів з навичкою 5.', 'good'); },
   admNoComp: () => confirmBox('Прибрати всі конкуруючі точки з міста?', () => { for (const l of state.lots) l.npc = null; }),
+  admRestoreComp: () => { const r = restoreCompetitors(); toast(`Відновлено компаній: ${r.revived}, нових точок у місті: ${r.placed}.`, 'good'); },
   admPhase: (d) => { state.econ.phase = d.v; state.econ.phaseDays = 60; news(`🛠️ Адмін: фаза економіки — ${PHASES[d.v].name}.`, 'econ'); },
   admResetPrices: () => { Object.assign(state.econ, { priceLevel: 1, wageLevel: 1, housing: 1 }); },
   admSkip: (d) => { for (let i = 0; i < 24 * +d.v && !state.over; i++) tick(); toast(`Пропущено ${d.v} дн.`, 'good'); },
@@ -815,6 +851,7 @@ const ACT = {
 };
 
 const CHANGE = {
+  contracts: (el) => { state.flags.noContracts = !el.checked; },
   admName: (el) => { const v = el.value.trim(); if (!v) return; if (el.dataset.k === 'company') state.company = v; else state.me.name = v; },
   admUnitName: (el) => { const v = el.value.trim(); if (v) unitById(el.dataset.id).name = v; },
   admCarName: (el) => { const v = el.value.trim(); const m = state.carModels.find((x) => x.id === el.dataset.id); if (v && m) m.name = v; },
