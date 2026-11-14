@@ -41,7 +41,7 @@ function avatarSVG(look, size = 40) {
 const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
-  ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
+  ['hq', '🏛️', 'Штаб'], ['regions', '🌍', 'Регіони'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
   ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
@@ -50,7 +50,7 @@ function renderTop() {
   const sp = ['❚❚', '▶', '▶▶', '▶▶▶'];
   const ph = PHASES[state.econ.phase];
   document.getElementById('topbar').innerHTML = `
-    <button class="brand" data-act="nav" data-v="life">${avatarSVG(state.me.look, 30)}<span><b>${esc(state.company)}</b><small>${esc(state.me.name)} · ${city().name}</small></span></button>
+    <button class="brand" data-act="nav" data-v="life">${avatarSVG(state.me.look, 30)}<span><b>${esc(state.company)}</b><small>${esc(state.me.name)} · ${city().name}${Object.keys(state.unlocked || {}).length > 1 ? ` +${Object.keys(state.unlocked).length - 1}` : ''}</small></span></button>
     <div class="clock"><span>День ${state.day} · ${WEEKDAYS[weekday()]}</span><b>${pad2(state.hour)}:00</b></div>
     <div class="speed">${sp.map((s, i) => `<button class="${state.speed === i ? 'on' : ''}" data-act="speed" data-v="${i}" aria-label="Швидкість ${i}">${s}</button>`).join('')}</div>
     <div class="cash hide-sm"><span>Економіка</span><b class="phase ${state.econ.phase}">${ph.name}</b></div>
@@ -208,7 +208,7 @@ const VIEWS = {
     const sel = state.ui.lot && lotById(state.ui.lot);
     if (use3D()) {
       return `<div class="city-wrap"><div id="city3d"></div>
-        <div class="city-hint">${sel ? '' : 'Торкніться будівлі або ділянки ＋'}</div>
+        <div class="city-hint">${cityChips()}${sel ? '' : '<div>Торкніться будівлі або ділянки ＋</div>'}</div>
         <div class="city-ctrl">
           <button data-act="cam" data-v="in" aria-label="Наблизити">＋</button><button data-act="cam" data-v="out" aria-label="Віддалити">−</button>
           <button data-act="cam" data-v="left" aria-label="Повернути ліворуч">⟲</button><button data-act="cam" data-v="right" aria-label="Повернути праворуч">⟳</button>
@@ -216,10 +216,10 @@ const VIEWS = {
           <button data-act="toggle3d" aria-label="2D-мапа">2D</button>
         </div>${sel ? `<div class="sheet">${lotPanel(sel)}</div>` : ''}</div>`;
     }
-    let html = `<div class="row between"><h1>Мапа міста</h1>${typeof City3D !== 'undefined' && City3D.ok() ? '<button class="btn sm" data-act="toggle3d">🏙️ 3D</button>' : ''}</div><p class="muted"><span class="lg own"></span> ваші · <span class="lg npc"></span> конкуренти · <span class="lg free"></span> вільні</p><div class="map">`;
+    let html = `<div class="chips filter">${cityChips()}</div><div class="row between"><h1>${CITIES[viewCity()].name}</h1>${typeof City3D !== 'undefined' && City3D.ok() ? '<button class="btn sm" data-act="toggle3d">🏙️ 3D</button>' : ''}</div><p class="muted"><span class="lg own"></span> ваші · <span class="lg npc"></span> конкуренти · <span class="lg free"></span> вільні</p><div class="map">`;
     for (const d of DISTRICTS) {
       html += `<div class="district" style="--dc:${d.color}"><div class="dh"><b>${d.name}</b><small>${d.zone === 'industry' ? 'Промислова зона' : 'Потік ' + d.traffic} · оренда ×${d.rent}</small></div><div class="lots">`;
-      for (const l of state.lots.filter((x) => x.district === d.id)) {
+      for (const l of state.lots.filter((x) => x.district === d.id && lotCityId(x) === viewCity())) {
         const cls = l.owner || (l.npc && isSub(coById(l.npc.co))) ? 'own' : l.npc ? 'npc' : 'free';
         html += `<button class="lot ${cls} ${sel === l ? 'sel' : ''}" data-act="selLot" data-id="${l.id}" title="${esc(l.addr)}"><span>${lotIcon(l)}</span><small>${l.size}</small></button>`;
       }
@@ -481,6 +481,44 @@ const VIEWS = {
     }).join('')}</div>`;
   },
 
+  hq() {
+    const H = hqState();
+    if (!H.founded) return `<h1>🏛️ Штаб-квартира</h1><div class="card hero"><p>Штаб-квартира дозволяє призначити директорів і давати їм доручення: оптимізувати виробництво, вести розробку, керувати мережею магазинів, розширюватися, контролювати фінанси, кадри й поглинання. Вони виконують завдання щодня самі.</p><button class="btn primary" ${state.cash < hqCost() ? 'disabled' : ''} data-act="foundHQ">Заснувати штаб-квартиру · ${moneyK(hqCost())}</button></div>`;
+    const active = Object.keys(DIRECTIVES).filter((k) => H.on[k]);
+    let html = `<h1>🏛️ Штаб-квартира</h1><div class="kpis">${kpi('Активних доручень', active.length + '/' + Object.keys(DIRECTIVES).length)}${kpi('Зарплати директорів', money(sum(active, directiveSalary)) + '/день')}${kpi('Готівка', moneyK(state.cash))}</div><div class="cards">`;
+    for (const [k, D] of Object.entries(DIRECTIVES)) {
+      const on = !!H.on[k];
+      let opts = '';
+      const chips = (opt, list, fmt) => `<div class="chips">${list.map((v) => `<button class="chip ${H.opts[opt] === v ? 'on' : ''}" data-act="hqOpt" data-k="${opt}" data-v="${v}">${fmt(v)}</button>`).join('')}</div>`;
+      if (k === 'expansion') opts = `<small class="muted">Бюджет на одне відкриття (частка готівки):</small>${chips('expansionBudget', [0.05, 0.1, 0.2, 0.4], (v) => Math.round(v * 100) + '%')}`;
+      if (k === 'ma') opts = `<small class="muted">Бюджет на поглинання (частка готівки):</small>${chips('maBudget', [0.1, 0.25, 0.5], (v) => Math.round(v * 100) + '%')}`;
+      if (k === 'retail') opts = `<small class="muted">Цінова політика мережі:</small>${chips('retailMode', Object.keys(PRICE_MODES), (v) => PRICE_MODES[v].name)}`;
+      html += `<div class="card camp ${on ? 'on' : ''}" style="display:block"><div class="row between"><b>${D.icon} ${D.name}</b><button class="btn sm ${on ? 'danger' : 'primary'}" data-act="hqToggle" data-k="${k}">${on ? 'Скасувати' : 'Доручити'}</button></div>
+        <small class="muted">${D.exec} · ${money(directiveSalary(k))}/день</small><p style="margin:6px 0">${D.desc}</p>${opts}${H.last[k] ? `<small class="pos">${esc(H.last[k])}</small>` : on ? '<small class="muted">Звіт з’явиться після закриття дня.</small>' : ''}</div>`;
+    }
+    html += `</div><div class="card"><h3>Журнал штабу</h3><ul class="log">${H.log.slice(0, 40).map((l) => `<li><small>Д${l.day}</small> ${DIRECTIVES[l.key].icon} ${esc(l.text)}</li>`).join('') || '<li class="muted">Поки порожньо.</li>'}</ul></div>`;
+    return html;
+  },
+
+  regions() {
+    const ids = Object.keys(CITIES);
+    const myCities = new Set([...state.biz, ...state.fac].map((u) => lotCityId(lotOf(u))));
+    let html = `<h1>🌍 Регіони</h1><div class="kpis">${kpi('Відкритих ринків', Object.keys(state.unlocked).length + '/' + ids.length)}${kpi('Міст із вашим бізнесом', myCities.size)}${kpi('Готівка', moneyK(state.cash))}</div>
+      <div class="card"><p class="muted">Вихід на новий ринок — ліцензії, реєстрація та офіс (разовий внесок). У кожному місті свої оренда, ціни й потік людей; там з’являться ваші ділянки та місцеві точки конкурентів. Персонал, склад і ринок B2B — спільні для всієї корпорації.</p></div><div class="cards">`;
+    for (const cid of ids) {
+      const C = CITIES[cid], open = !!state.unlocked[cid];
+      const lots = state.lots.filter((l) => lotCityId(l) === cid);
+      const mine = [...state.biz, ...state.fac].filter((u) => lotCityId(lotOf(u)) === cid);
+      const comp = lots.filter((l) => l.npc).length, free = lots.filter((l) => !l.npc && !l.owner).length;
+      const rev = sum(state.biz.filter((b) => lotCityId(lotOf(b)) === cid), (b) => (b.yest ? b.yest.rev : 0));
+      html += `<div class="card ${open ? 'camp on' : ''}" style="display:block"><div class="row between"><b>${C.name} <small class="muted">${C.flag} · ${REGION_OF[cid]}</small></b>${cid === state.city ? '<span class="tag good">головне місто</span>' : open ? '<span class="tag good">відкрито</span>' : ''}</div>
+        <p class="muted">${C.desc}</p><small>Потік ×${C.traffic} · оренда ×${C.rent} · ціни ×${C.price} · зарплати ×${C.wage}${C.tourism ? ' · туристи' : ''}</small>
+        ${open ? `<div class="mini"><span>Ваших об’єктів<br><b>${mine.length}</b></span><span>Конкурентів<br><b>${comp}</b></span><span>Вільно ділянок<br><b>${free}</b></span><span>Виручка вчора<br><b>${moneyK(rev)}</b></span></div><div class="row wrap" style="margin-top:8px"><button class="btn sm primary" data-act="goCity" data-v="${cid}">🏙️ До міста</button></div>`
+          : `<div class="row wrap" style="margin-top:8px"><button class="btn sm primary" ${state.cash < regionCost(cid) ? 'disabled' : ''} data-act="unlockCity" data-v="${cid}">Вийти на ринок · ${moneyK(regionCost(cid))}</button></div>`}</div>`;
+    }
+    return html + '</div>';
+  },
+
   ranking() {
     const rows = companyRanking();
     const myRank = rows.findIndex((x) => x.me) + 1;
@@ -502,7 +540,7 @@ const VIEWS = {
         const tp = takeoverPrice(r.co);
         actions = `<div class="trade"><button class="btn sm primary" ${state.cash < tp ? 'disabled' : ''} data-act="acquire" data-id="${r.co.id}">🦈 Поглинути за ${moneyK(tp)}</button>${state.portfolio[r.co.id] ? `<small class="muted">у вас ${state.portfolio[r.co.id].qty} акцій</small>` : ''}</div>`;
       }
-      html += `<div class="stock ${r.me || sub ? 'mine' : ''}"><div><b>#${i + 1} ${esc(r.name)}</b>${r.me ? ' <span class="tag good">ви</span>' : sub ? ' <span class="tag good">дочірня</span>' : ''}<br><small>${r.sector} · точок у місті: ${r.shops} · прибуток ${money(r.profit)}/день${r.co && r.co.acquired ? ` · поглинула: ${r.co.acquired.map(esc).join(', ')}` : ''}${r.co && state.contracts && state.contracts[r.co.id] ? ` · ваш клієнт (${moneyK(state.contracts[r.co.id].total)})` : ''}</small></div><div class="px"><b>${moneyK(r.cap)}</b><br><small class="muted">капіталізація</small></div>${r.co ? spark(r.co.hist.slice(-30)) : '<span></span>'}${actions}</div>`;
+      html += `<div class="stock ${r.me || sub ? 'mine' : ''}"><div><b>#${i + 1} ${esc(r.name)}</b>${r.me ? ' <span class="tag good">ви</span>' : sub ? ' <span class="tag good">дочірня</span>' : ''}<br><small>${r.sector} · точок у місті: ${r.shops} · прибуток ${money(r.profit)}/день${r.co && r.co.acquired ? ` · поглинула: ${r.co.acquired.map(esc).join(', ')}` : ''}${r.co && !sub ? influenceNote(r.co) : ''}${r.co && state.contracts && state.contracts[r.co.id] ? ` · ваш клієнт (${moneyK(state.contracts[r.co.id].total)})` : ''}</small></div><div class="px"><b>${moneyK(r.cap)}</b><br><small class="muted">капіталізація</small></div>${r.co ? spark(r.co.hist.slice(-30)) : '<span></span>'}${actions}</div>`;
     });
     return html + '</div>';
   },
@@ -548,6 +586,19 @@ const VIEWS = {
   },
 };
 
+function influenceNote(co) {
+  const { factor, parts } = playerInfluenceParts(co);
+  if (Math.abs(factor - 1) < 0.01) return '';
+  const pctTxt = `${factor < 1 ? '−' : '+'}${Math.round(Math.abs(1 - factor) * 100)}%`;
+  return `<br><span class="${factor < 1 ? 'pos' : 'muted'}">ваш вплив: ${pctTxt} виручки (${parts.join(', ')})</span>`;
+}
+
+function cityChips() {
+  const ids = Object.keys(state.unlocked || {});
+  if (ids.length < 2) return '';
+  return `<span class="citychips">${ids.map((cid) => `<button class="chip ${viewCity() === cid ? 'on' : ''}" data-act="mapCity" data-v="${cid}">${CITIES[cid].name}</button>`).join('')}</span>`;
+}
+
 function lotIcon(l) {
   if (l.ownerKind === 'biz') return TYPES[bizById(l.owner).type].icon;
   if (l.ownerKind === 'fac') return FACILITIES[facById(l.owner).kind].icon;
@@ -559,7 +610,7 @@ function lotIcon(l) {
 function lotPanel(l) {
   const D = DMAP[l.district], S = SIZES[l.size];
   let html = `<div class="card lotpanel" id="lotpanel"><div class="row between"><h3>📍 ${esc(l.addr)}</h3><button class="btn ghost sm" data-act="selLot" data-id="" aria-label="Закрити">✕</button></div>
-    <p>${D.name} · ${S.name} ${S.m2} м² · оренда <b>${money(lotRent(l))}/день</b></p><p class="muted">${D.desc}</p>`;
+    <p>${CITIES[lotCityId(l)].name} · ${D.name} · ${S.name} ${S.m2} м² · оренда <b>${money(lotRent(l))}/день</b></p><p class="muted">${D.desc}</p>`;
   if (l.ownerKind === 'biz') { const b = bizById(l.owner); return html + `<p>Ваш бізнес <b>${esc(b.name)}</b>.</p><button class="btn primary" data-act="biz" data-id="${b.id}">Перейти</button></div>`; }
   if (l.ownerKind === 'fac') { const f = facById(l.owner); return html + `<p>Ваше підприємство <b>${esc(f.name)}</b>.</p><button class="btn primary" data-act="fac" data-id="${f.id}">Перейти</button></div>`; }
   if (l.ownerKind === 'prop') { const p = propById(l.owner); return html + `<p>${PROP_KINDS[p.kind].icon} ${PROP_KINDS[p.kind].name}${p.building ? ` — будівництво, лишилось ${p.building} дн.` : ''}.</p><button class="btn primary" data-act="nav" data-v="realty">Нерухомість</button></div>`; }
@@ -575,12 +626,12 @@ function lotPanel(l) {
     html += '<h4>Магазини і заклади</h4>';
     for (const [k, T] of Object.entries(TYPES)) {
       if (T.minSize && SIZE_ORDER.indexOf(l.size) < SIZE_ORDER.indexOf(T.minSize)) continue;
-      const comp = state.lots.filter((x) => x.district === l.district && ((x.npc && x.npc.type === k) || (x.ownerKind === 'biz' && bizById(x.owner).type === k))).length;
+      const comp = state.lots.filter((x) => x.district === l.district && lotCityId(x) === lotCityId(l) && ((x.npc && x.npc.type === k) || (x.ownerKind === 'biz' && bizById(x.owner).type === k))).length;
       html += row(T.icon, T.name, `<span class="stars">${stars(T.aff[l.district] || 0.5)}</span> <small>· конкурентів: ${comp}</small>`, setupCost(k, l) + lotRent(l) * 7, 'openBiz', `data-type="${k}"`);
     }
     if (FACILITIES.office.sizes.includes(l.size)) html += '<h4>IT</h4>' + row('💻', FACILITIES.office.name, '<small>Розробка застосунків, ігор, хмарних сервісів</small>', facSetupCost('office', l) + lotRent(l) * 7, 'openFac', 'data-kind="office"');
     const cons = Object.entries(CONSTRUCT).filter(([, C]) => C.sizes.includes(l.size));
-    if (cons.length) html += '<h4>Будівництво</h4>' + cons.map(([k, C]) => `<div class="typerow"><span class="big">🏗️</span><div><b>${C.name}</b><br><small>${C.days} днів · потім оренда ${pct(PROP_KINDS[k].yield)}/рік</small><br><small>Вартість ${money(constructCost(k))}</small></div><button class="btn primary sm" ${state.cash < constructCost(k) ? 'disabled' : ''} data-act="construct" data-lot="${l.id}" data-kind="${k}">Будувати</button></div>`).join('');
+    if (cons.length) html += '<h4>Будівництво</h4>' + cons.map(([k, C]) => `<div class="typerow"><span class="big">🏗️</span><div><b>${C.name}</b><br><small>${C.days} днів · потім оренда ${pct(PROP_KINDS[k].yield)}/рік</small><br><small>Вартість ${money(constructCost(k, l))}</small></div><button class="btn primary sm" ${state.cash < constructCost(k, l) ? 'disabled' : ''} data-act="construct" data-lot="${l.id}" data-kind="${k}">Будувати</button></div>`).join('');
   } else {
     html += '<h4>Підприємства</h4>';
     for (const [k, F] of Object.entries(FACILITIES)) {
@@ -630,7 +681,7 @@ const BIZ_TABS = {
       ${prods.some((p) => p.good && !p.carOnly) ? `<label class="switch"><input type="checkbox" data-change="useOwn" data-id="${b.id}" ${b.useOwn ? 'checked' : ''}> Спершу брати власну продукцію зі складу</label>` : ''}</div>
       ${!prods.length ? '<div class="card"><p class="muted">Немає моделей авто для продажу. Розробіть модель і виробіть її на автозаводі.</p></div>' : ''}<div class="cards">`;
     for (const p of prods) {
-      const st = b.products[p.id], fair = fairPrice(p), r = st.price / fair;
+      const st = b.products[p.id], fair = fairPrice(p, b), r = st.price / fair;
       const unitCost = p.carOnly ? st.cost : wholesale(b, p);
       html += `<div class="card prod"><div class="row between"><b>${esc(p.name)}</b>${p.spoil ? `<span class="tag">псується ${Math.round(p.spoil * 100)}%/ніч</span>` : ''}</div>
         ${p.good ? `<small class="muted">${p.carOnly ? 'З вашого заводу' : `Своє виробництво: ${GOODS[p.good].icon} ${GOODS[p.good].name} ×${p.gq} (на складі ${Math.floor(whQty(p.good))})`}</small>` : ''}
@@ -735,7 +786,7 @@ const ACT = {
   selLot: (d) => { state.ui.lot = d.id || null; if (d.id && !use3D()) setTimeout(() => { const p = document.getElementById('lotpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); },
   openBiz: (d) => openBusiness(d.lot, d.type),
   openFac: (d) => openFacility(d.lot, d.kind),
-  construct: (d) => confirmBox(`Збудувати ${CONSTRUCT[d.kind].name.toLowerCase()} за ${money(constructCost(d.kind))}?`, () => construct(d.lot, d.kind)),
+  construct: (d) => confirmBox(`Збудувати ${CONSTRUCT[d.kind].name.toLowerCase()} за ${money(constructCost(d.kind, lotById(d.lot)))}?`, () => construct(d.lot, d.kind)),
   biz: (d) => { Object.assign(state.ui, { view: 'biz', bizId: d.id, tab: 'overview' }); hideModal(); },
   fac: (d) => { Object.assign(state.ui, { view: 'fac', facId: d.id, tab: 'overview' }); hideModal(); },
   tab: (d) => { state.ui.tab = d.v; },
@@ -745,7 +796,7 @@ const ACT = {
   showOnMap: (d) => { const u = unitById(d.id); state.ui.view = 'map'; state.ui.lot = u.lotId; if (use3D()) City3D.focus(u.lotId); },
   buy: (d) => { const b = bizById(d.id); const q = +document.getElementById('qty-' + d.p).value; const r = buyStock(b, d.p, q); if (r.qty) toast(`Отримано ${r.qty} од.${r.own ? ` (${r.own} з власного складу)` : ''}${r.cost ? ' за ' + money(r.cost) : ''}.`, 'good'); },
   fillAll: (d) => fillAll(bizById(d.id)),
-  priceFair: (d) => { const b = bizById(d.id), p = productsOf(b).find((x) => x.id === d.p); b.products[d.p].price = +fairPrice(p).toFixed(2); },
+  priceFair: (d) => { const b = bizById(d.id), p = productsOf(b).find((x) => x.id === d.p); b.products[d.p].price = +fairPrice(p, b).toFixed(2); },
   priceUp: (d) => { const st = bizById(d.id).products[d.p]; st.price = +(st.price * 1.05).toFixed(2); },
   priceDown: (d) => { const st = bizById(d.id).products[d.p]; st.price = +(st.price * 0.95).toFixed(2); },
   hire: (d) => { const s = document.getElementById('hire-' + d.id); hire(d.id, s && s.value); },
@@ -799,10 +850,16 @@ const ACT = {
   admSetCash: () => { const v = +document.getElementById('admCash').value; if (isFinite(v)) { book('admin', v - state.cash); state.negDays = 0; toast(`Баланс: ${money(v)}.`, 'good'); } },
   admPayDebt: () => { for (const l of state.loans) if (l.prop) { const p = propById(l.prop); if (p) p.mortgage = null; } state.loans = []; toast('Усі кредити списано.', 'good'); },
   admCredit: () => { state.me.credit = 850; },
-  admPrices: (d) => { const b = bizById(d.id); for (const p of productsOf(b)) { const st = b.products[p.id]; if (st) st.price = +(+d.v ? st.price * +d.v : fairPrice(p)).toFixed(2); } },
+  admPrices: (d) => { const b = bizById(d.id); for (const p of productsOf(b)) { const st = b.products[p.id]; if (st) st.price = +(+d.v ? st.price * +d.v : fairPrice(p, b)).toFixed(2); } },
   acquire: (d) => { const co = coById(d.id); confirmBox(`Поглинути «${esc(co.name)}» за ${money(takeoverPrice(co))}?`, () => acquireCompany(d.id)); },
   sellSub: (d) => { const co = coById(d.id); confirmBox(`Продати дочірню «${esc(co.name)}» за ${money(coMcap(co) * 0.95)}?`, () => sellSubsidiary(d.id)); },
   payout: (d) => { coById(d.id).payout = +d.v; },
+  foundHQ: () => confirmBox(`Заснувати штаб-квартиру за ${money(hqCost())}?`, foundHQ),
+  hqToggle: (d) => { const H = hqState(); H.on[d.k] = !H.on[d.k]; if (H.on[d.k]) { try { HQ_RUN[d.k](); } catch (e) { console.error(e); } toast(`${DIRECTIVES[d.k].exec}: доручення прийнято.`, 'good'); } },
+  hqOpt: (d) => { const H = hqState(); H.opts[d.k] = isNaN(+d.v) ? d.v : +d.v; },
+  unlockCity: (d) => confirmBox(`Вийти на ринок міста ${CITIES[d.v].name} за ${money(regionCost(d.v))}?`, () => unlockCity(d.v)),
+  goCity: (d) => { state.ui.mapCity = d.v; state.ui.lot = null; state.ui.view = 'map'; },
+  mapCity: (d) => { state.ui.mapCity = d.v; state.ui.lot = null; if (use3D()) City3D.control('reset'); },
   rankSector: (d) => { state.ui.rankSector = d.v; },
   admOpen: (d) => { state.ui.admOpen = state.ui.admOpen === d.id ? null : d.id; },
   admRep: () => { for (const b of state.biz) b.rep = 100; },
@@ -834,7 +891,7 @@ const ACT = {
     try {
       const s = JSON.parse(decodeURIComponent(escape(atob(document.getElementById('saveIn').value.trim()))));
       if (!s || s.v !== 2 || !s.econ) throw new Error('несумісний код');
-      state = s; save(); hideModal(); setSpeed(0); toast('Збереження завантажено.', 'good');
+      state = s; migrateState(); save(); hideModal(); setSpeed(0); toast('Збереження завантажено.', 'good');
     } catch (e) { toast('Не вдалося прочитати код: ' + e.message, 'bad'); return 'norender'; }
   },
   newGameConfirm: () => confirmBox('Почати нову гру? Прогрес буде втрачено.', () => setTimeout(() => startPrompt(true), 0)),
@@ -926,6 +983,7 @@ function boot() {
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && state) save(); });
   if (loadSave() && state && !state.over) {
+    migrateState();
     render(true); setSpeed(0);
     toast('Гру завантажено. Натисніть ▶, щоб продовжити.');
   } else startPrompt(false);

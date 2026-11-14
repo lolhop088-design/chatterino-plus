@@ -9,6 +9,12 @@ const priceLvl = () => city().price * state.econ.priceLevel;
 const wageLvl = () => city().wage * state.econ.wageLevel;
 const rentLvl = () => city().rent * state.econ.housing;
 const weekday = (day = state.day) => (day - 1) % 7;
+// Багатомістовість: кожна ділянка належить місту; ціни, оренда й потік рахуються за містом ділянки.
+const lotCityId = (l) => (l && l.city) || state.city;
+const cityOfLot = (l) => CITIES[lotCityId(l)] || city();
+const priceAtLot = (l) => state.econ.priceLevel * cityOfLot(l).price;
+const priceAt = (u) => (u && u.lotId ? priceAtLot(lotById(u.lotId)) : priceLvl());
+const viewCity = () => (state.ui.mapCity && state.unlocked && state.unlocked[state.ui.mapCity] ? state.ui.mapCity : state.city);
 
 // ================= Нова гра =================
 function newGame(o = {}) {
@@ -29,6 +35,7 @@ function newGame(o = {}) {
   genCompanies();
   genLots();
   genProps();
+  migrateState();
   for (let i = 0; i < 10; i++) state.candidates.push(makeCandidate());
   state.invPrev = inventoryValue();
   log(`Ласкаво просимо до міста ${C.name}, ${state.me.name}! На рахунку ${money(state.cash)}.`, 'good');
@@ -51,13 +58,13 @@ function addCompany(name, ticker, sector) {
 const coById = (id) => state.companies.find((c) => c.id === id);
 const aliveCos = () => state.companies.filter((c) => c.alive);
 
-function genLots() {
+function genLots(cityId = state.city, prefix = '') {
   for (const d of DISTRICTS) {
     for (let i = 0; i < 12; i++) {
       const r = Math.random();
       const size = d.zone === 'industry' ? (r < 0.15 ? 'M' : r < 0.6 ? 'L' : 'XL') : (r < 0.4 ? 'S' : r < 0.75 ? 'M' : 'L');
       const street = pick(d.streets);
-      const lot = { id: d.id + i, district: d.id, idx: i, size, addr: street.endsWith('№') ? `${street}${ri(1, 30)}` : `${street}, ${ri(1, 140)}`, npc: null, owner: null, ownerKind: null };
+      const lot = { id: prefix + d.id + i, city: cityId, district: d.id, idx: i, size, addr: street.endsWith('№') ? `${street}${ri(1, 30)}` : `${street}, ${ri(1, 140)}`, npc: null, owner: null, ownerKind: null };
       populateCompetitor(lot);
       state.lots.push(lot);
     }
@@ -124,7 +131,7 @@ const staffOf = (u) => state.staff.filter((p) => p.unit === u.id);
 const propById = (id) => state.props.find((p) => p.id === id);
 const unitRole = (u) => (u.kind ? FACILITIES[u.kind].role : 'sales');
 const effSkill = (p, role) => p.skill * (p.role === role ? 1 : 0.55) * (0.6 + 0.4 * p.morale / 100);
-const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * rentLvl());
+const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * cityOfLot(lot).rent * state.econ.housing);
 const debt = () => sum(state.loans, (l) => l.amount);
 const modMult = (kind, key) => { let m = 1; for (const md of state.mods) if (md.kind === kind && (md.key == null || md.key === key)) m *= md.mult; return m; };
 function maxStaff(u) {
@@ -143,8 +150,8 @@ const stockValue = (b) => sum(Object.values(b.products), (p) => p.stock * p.cost
 const openHours = (b) => b.close - b.open;
 const dailyWages = (u) => sum(staffOf(u), (p) => p.wage) * (u.kind ? 8 : openHours(u));
 const dailyMarketing = (b) => sum(Object.keys(CAMPAIGNS).filter((k) => b.marketing[k]), (k) => CAMPAIGNS[k].cost) * priceLvl();
-const upgradeCost = (b, k) => Math.round(TYPES[b.type].setup * SIZES[lotOf(b).size].setup * UPGRADES[k].k * b.upg[k] * priceLvl());
-const setupCost = (type, lot) => Math.round(TYPES[type].setup * SIZES[lot.size].setup * priceLvl());
+const upgradeCost = (b, k) => Math.round(TYPES[b.type].setup * SIZES[lotOf(b).size].setup * UPGRADES[k].k * b.upg[k] * priceAt(b));
+const setupCost = (type, lot) => Math.round(TYPES[type].setup * SIZES[lot.size].setup * priceAtLot(lot));
 
 function productsOf(b) {
   const T = TYPES[b.type];
@@ -156,28 +163,28 @@ function productsOf(b) {
 function ensureProducts(b) {
   const S = SIZES[lotOf(b).size];
   for (const p of productsOf(b)) {
-    if (!b.products[p.id]) b.products[p.id] = { price: +(p.price * priceLvl()).toFixed(2), stock: 0, cost: p.cost * priceLvl(), target: Math.max(2, Math.round(storageCap(b) * p.share * 0.6)), sold: 0, soldY: 0 };
+    if (!b.products[p.id]) b.products[p.id] = { price: +(p.price * priceAt(b)).toFixed(2), stock: 0, cost: p.cost * priceAt(b), target: Math.max(2, Math.round(storageCap(b) * p.share * 0.6)), sold: 0, soldY: 0 };
   }
   return S;
 }
-const fairPrice = (p) => p.price * priceLvl();
+const fairPrice = (p, b) => p.price * (b ? priceAt(b) : priceLvl());
 function wholesale(b, p) {
   const T = TYPES[b.type];
-  return p.cost * priceLvl() * modMult('wholesale') * modMult('supplier', b.type) * (T.import ? state.econ.fx / 41 : 1);
+  return p.cost * priceAt(b) * modMult('wholesale') * modMult('supplier', b.type) * (T.import ? state.econ.fx / 41 : 1);
 }
 function competitors(b) {
   const lot = lotOf(b);
   let s = 0;
   for (const l of state.lots) {
-    if (l.district !== lot.district || l === lot) continue;
+    if (l.district !== lot.district || l === lot || lotCityId(l) !== lotCityId(lot)) continue;
     if (l.npc && l.npc.type === b.type) { const co = coById(l.npc.co); if (!isSub(co)) s += co ? co.rep : 1; }
     if (l.ownerKind === 'biz') { const o = bizById(l.owner); if (o && o.type === b.type) s += 1; }
   }
   return s * modMult('pricewar', b.type);
 }
-function trafficMult(districtId, type) {
-  let m = modMult('traffic', districtId) * modMult('traffic', '*') * city().traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
-  if (city().tourism && (districtId === 'center' || districtId === 'river')) m *= city().tourism;
+function trafficMult(districtId, type, C = city()) {
+  let m = modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
   if (wd >= 5) {
     if (districtId === 'biz') m *= 0.55;
@@ -201,8 +208,8 @@ function simulateHour(b, h) {
   ensureProducts(b);
   const e = T.elast * D.sens;
   const mkt = 1 + sum(Object.keys(CAMPAIGNS).filter((k) => b.marketing[k]), (k) => CAMPAIGNS[k].boost);
-  const ratio = sum(prods, (p) => p.share * (b.products[p.id].price / fairPrice(p)));
-  let potential = D.traffic * trafficMult(D.id, b.type) * T.draw * (T.aff[D.id] || 0.5) * CURVES[T.curve][h] * S.attract
+  const ratio = sum(prods, (p) => p.share * (b.products[p.id].price / fairPrice(p, b)));
+  let potential = D.traffic * trafficMult(D.id, b.type, cityOfLot(lot)) * T.draw * (T.aff[D.id] || 0.5) * CURVES[T.curve][h] * S.attract
     * (1 / (1 + 0.3 * competitors(b))) * mkt * (0.5 + b.rep / 100) * (1 + 0.12 * (b.upg.interior - 1));
   potential *= clamp(1 - 0.5 * e * (ratio - 1), 0.2, 1.4) * rnd(0.85, 1.15);
   const arrivals = sround(potential);
@@ -210,7 +217,7 @@ function simulateHour(b, h) {
   let rev = 0, cogs = 0, wanted = 0, sold = 0;
   for (const p of prods) {
     const st = b.products[p.id];
-    const accept = clamp(1 - e * (st.price / fairPrice(p) - 1), 0, 1.3);
+    const accept = clamp(1 - e * (st.price / fairPrice(p, b) - 1), 0, 1.3);
     const want = sround(served * p.share * accept);
     const s = Math.min(want, Math.floor(st.stock));
     st.stock -= s; st.sold += s; st.miss = (st.miss || 0) + (want - s);
@@ -233,7 +240,7 @@ function simulateHour(b, h) {
 
 function emptyDay() { return { rev: 0, cogs: 0, arrivals: 0, served: 0, lost: 0, oos: 0, units: 0, satSum: 0, satN: 0, noStaff: 0 }; }
 
-function openBusiness(lotId, type) {
+function openBusiness(lotId, type, silent = false) {
   const lot = lotById(lotId);
   if (!lot || lot.npc || lot.owner) return;
   const T = TYPES[type];
@@ -252,9 +259,11 @@ function openBusiness(lotId, type) {
   state.biz.push(b);
   ensureProducts(b);
   log(`Відкрито «${b.name}» (${DMAP[lot.district].name}). Витрати: ${money(cost)}.`, 'good');
-  toast(`${T.icon} Бізнес відкрито! Наймайте персонал і закупіть товар.`, 'good');
   checkAchievements();
+  if (silent) return b;
+  toast(`${T.icon} Бізнес відкрито! Наймайте персонал і закупіть товар.`, 'good');
   Object.assign(state.ui, { view: 'biz', bizId: b.id, tab: 'overview', lot: null });
+  return b;
 }
 
 function buyStock(b, pid, qty, markup = 1, silent = false) {
@@ -377,7 +386,7 @@ function deliverOrders() {
 }
 
 // ================= Виробництво =================
-function facSetupCost(kind, lot) { return Math.round(FACILITIES[kind].setup * (SIZES[lot.size].setup / 2) * priceLvl()); }
+function facSetupCost(kind, lot) { return Math.round(FACILITIES[kind].setup * (SIZES[lot.size].setup / 2) * priceAtLot(lot)); }
 function openFacility(lotId, kind) {
   const lot = lotById(lotId), F = FACILITIES[kind];
   if (!lot || lot.npc || lot.owner) return;
@@ -615,11 +624,11 @@ function sellProp(id) {
   if (p.lotId) { const lot = lotById(p.lotId); if (lot) { lot.owner = null; lot.ownerKind = null; } state.props = state.props.filter((x) => x !== p); }
   log(`Продано нерухомість за ${money(v)}.`, 'good');
 }
-function constructCost(kind) { return Math.round(CONSTRUCT[kind].cost * priceLvl() * Math.sqrt(city().rent)); }
+function constructCost(kind, lot) { return Math.round(CONSTRUCT[kind].cost * (lot ? priceAtLot(lot) : priceLvl()) * Math.sqrt(lot ? cityOfLot(lot).rent : city().rent)); }
 function construct(lotId, kind) {
   const lot = lotById(lotId), C = CONSTRUCT[kind];
   if (!lot || lot.npc || lot.owner || !C.sizes.includes(lot.size)) return;
-  const cost = constructCost(kind);
+  const cost = constructCost(kind, lot);
   if (state.cash < cost) return toast(`Потрібно ${money(cost)}.`, 'bad');
   book('capex', -cost);
   const p = { id: uid(), kind, district: lot.district, addr: lot.addr, base: Math.round(cost * 1.3 / rentLvl()), owned: true, rentOut: true, tenant: null, building: C.days, lotId, bought: cost, cost };
@@ -838,7 +847,8 @@ function aiDaily() {
     if (!co.alive) continue;
     const S = SECTORS[co.sector];
     const shops = state.lots.filter((l) => l.npc && l.npc.co === co.id).length;
-    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl();
+    co.influence = isSub(co) ? 1 : playerInfluence(co);
+    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl() * co.influence;
     let profit = rev * S.margin * co.eff - S.rev * co.scale * 0.02 * (e.phase === 'crisis' ? 1.5 : 1);
     if (chance(0.01)) profit -= rev * rnd(0.5, 3); // разові збитки
     co.cash += profit;
@@ -861,6 +871,7 @@ function aiDaily() {
         news(`🏬 «${co.name}» відкриває ${TYPES[co.sector].name.toLowerCase()} у районі «${DMAP[l.district].name}».`, 'corp');
       }
     }
+    if (co.influence < 0.85 && chance(0.03)) news(`📉 «${co.name}» втрачає ринок через ${state.company}: виручка −${Math.round((1 - co.influence) * 100)}%.`, 'corp');
     if (co.ema < 0 && shops && chance(0.04)) {
       const l = pick(state.lots.filter((x) => x.npc && x.npc.co === co.id)); l.npc = null;
       news(`«${co.name}» закриває збиткову точку в районі «${DMAP[l.district].name}».`, 'corp');
@@ -915,6 +926,63 @@ function aiDaily() {
   }
   if (state.ipo) ipoDaily();
 }
+// ================= Вплив гравця на ІІ-компанії =================
+function bizPriceRatio(b) {
+  const prods = productsOf(b).filter((p) => b.products[p.id]);
+  return prods.length ? sum(prods, (p) => p.share * (b.products[p.id].price / fairPrice(p, b))) / (sum(prods, (p) => p.share) || 1) : 1;
+}
+/** Множник виручки компанії від дій гравця (1 — без впливу). Пояснення — у playerInfluenceParts. */
+function playerInfluence(co) { return playerInfluenceParts(co).factor; }
+function playerInfluenceParts(co) {
+  let f = 1; const parts = [];
+  if (TYPES[co.sector]) {
+    const mine = state.biz.filter((b) => b.type === co.sector);
+    const ai = state.lots.filter((l) => l.npc && l.npc.type === co.sector && !isSub(coById(l.npc.co))).length;
+    if (mine.length) {
+      const share = mine.length / (mine.length + ai);
+      f *= 1 - 0.6 * share; parts.push(`ваша частка ринку ${Math.round(share * 100)}%`);
+      const ratio = sum(mine, bizPriceRatio) / mine.length;
+      if (ratio < 0.97) { f *= Math.max(0.6, 1 - (0.97 - ratio) * 1.5); parts.push(`ваші ціни нижчі на ${Math.round((1 - ratio) * 100)}%`); }
+      const rep = sum(mine, (b) => b.rep) / mine.length;
+      if (rep > 80) { f *= 0.95; parts.push('репутація ваших магазинів'); }
+    }
+  }
+  if (co.sector === 'steel' && state.market.steel.mult < 0.98) { f *= state.market.steel.mult; parts.push('ви збили ціну сталі'); }
+  if (co.sector === 'oil' && state.market.oil.mult < 0.98) { f *= state.market.oil.mult; parts.push('ви збили ціну нафти'); }
+  const pp = state.fac.filter((x) => x.kind === 'powerplant').length;
+  if (co.sector === 'energy' && pp) { f *= Math.max(0.6, 1 - 0.05 * pp); parts.push(`${pp} ваших електростанцій`); }
+  const lc = state.fac.filter((x) => x.kind === 'logistics').length;
+  if (co.sector === 'logistics' && lc) { f *= Math.max(0.6, 1 - 0.04 * lc); parts.push(`${lc} ваших логістичних центрів`); }
+  const live = state.projects.filter((p) => p.status === 'live').length;
+  if (co.sector === 'tech' && live) { f *= Math.max(0.6, 1 - 0.02 * live); parts.push(`${live} ваших IT-продуктів`); }
+  const cm = state.carModels.filter((m) => m.active).length;
+  if (co.sector === 'dealership' && cm) { f *= Math.max(0.6, 1 - 0.04 * cm); parts.push(`${cm} ваших моделей авто`); }
+  const c = state.contracts && state.contracts[co.id];
+  if (c && c.day >= state.day - 1) { f *= 1.03; parts.push('купує у вас за контрактом (+)'); }
+  return { factor: clamp(f, 0.3, 1.2), parts };
+}
+
+// ================= Регіони =================
+const regionCost = (cid) => Math.round(2500000 * CITIES[cid].rent * state.econ.priceLevel);
+function unlockCity(cid) {
+  if (!CITIES[cid] || state.unlocked[cid]) return;
+  const cost = regionCost(cid);
+  if (state.cash < cost) return toast(`Вихід на ринок коштує ${moneyK(cost)}.`, 'bad');
+  book('capex', -cost);
+  state.unlocked[cid] = true;
+  genLots(cid, cid + ':');
+  news(`🌍 ${state.company} виходить на ринок міста ${CITIES[cid].name} (${REGION_OF[cid]}).`, 'corp', 'good');
+  log(`🌍 Відкрито новий ринок: ${CITIES[cid].name}. Ліцензії та реєстрація: ${money(cost)}.`, 'good');
+  state.ui.mapCity = cid;
+  checkAchievements();
+}
+/** Сумісність зі старими збереженнями (одне місто). */
+function migrateState() {
+  if (!state.unlocked) state.unlocked = { [state.city]: true };
+  for (const l of state.lots) if (!l.city) l.city = state.city;
+  if (!state.contracts) state.contracts = {};
+}
+
 // ================= Поглинання компаній =================
 const isSub = (co) => !!co && co.owner === 'player';
 const coMcap = (co) => co.price * co.shares;
@@ -1124,7 +1192,7 @@ function managerRetailDay(b) {
     if (!st) continue;
     // ціни йдуть за інфляцією й не падають нижче собівартості
     const unit = p.carOnly ? st.cost : wholesale(b, p);
-    st.price = +Math.max(fairPrice(p) * mode.k, unit * 1.15).toFixed(2);
+    st.price = +Math.max(fairPrice(p, b) * mode.k, unit * 1.15).toFixed(2);
     // запаси під фактичний попит
     const sold = st.soldY || 0, miss = st.missY || 0;
     if (miss > 0) st.target = Math.round(st.target * 1.25 + miss);
@@ -1277,6 +1345,8 @@ const ACHIEVEMENTS = [
   { id: 'investor', icon: '📊', name: 'Інвестор', desc: 'Акції 5 різних компаній', check: (s) => Object.keys(s.portfolio).length >= 5 },
   { id: 'corp', icon: '🏛️', name: 'Корпорація', desc: 'Усі 6 відділів працюють', check: (s) => Object.values(s.depts).every((v) => v > 0) },
   { id: 'ipo', icon: '🔔', name: 'Публічна компанія', desc: 'Проведіть IPO', check: (s) => !!s.ipo },
+  { id: 'cities3', icon: '🌍', name: 'Міжнародна корпорація', desc: 'Бізнес у 3 містах', check: (s) => new Set([...s.biz, ...s.fac].map((u) => lotCityId(lotOf(u)))).size >= 3 },
+  { id: 'cities6', icon: '🌐', name: 'Глобальна присутність', desc: 'Бізнес у 6 містах', check: (s) => new Set([...s.biz, ...s.fac].map((u) => lotCityId(lotOf(u)))).size >= 6 },
   { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
   { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },
   { id: 'debt_free', icon: '🏦', name: 'Без боргів', desc: 'Повністю погасіть кредит', check: (s) => s.flags.repaid },

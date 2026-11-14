@@ -364,7 +364,9 @@ const City3D = (() => {
   }
   function sync() {
     const seen = new Set();
+    const vc = viewCity();
     for (const l of state.lots) {
+      if (lotCityId(l) !== vc) continue; // показуємо лише обране місто
       seen.add(l.id);
       const key = lotKey(l), cur = lotObjs.get(l.id);
       if (cur && cur.key === key) continue;

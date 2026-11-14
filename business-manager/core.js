@@ -36,7 +36,12 @@ const CITIES = {
   odesa: { name: 'Одеса', flag: 'UA', traffic: 0.95, rent: 0.85, wage: 0.9, price: 0.95, tax: 0.18, transport: 0.7, desc: 'Морський порт — логістика на 30% дешевша.' },
   berlin: { name: 'Берлін', flag: 'DE', traffic: 1.25, rent: 1.6, wage: 1.6, price: 1.25, tax: 0.3, transport: 1.1, desc: 'Великий стабільний ринок, але податок 30%.' },
   newyork: { name: 'Нью-Йорк', flag: 'US', traffic: 1.6, rent: 2.4, wage: 2.0, price: 1.5, tax: 0.25, transport: 1.2, desc: 'Найбільший ринок і шалені витрати. Хардкор.' },
+  warsaw: { name: 'Варшава', flag: 'PL', traffic: 1.15, rent: 1.2, wage: 1.3, price: 1.1, tax: 0.19, transport: 1.0, desc: 'Швидке зростання, помірні витрати.' },
+  london: { name: 'Лондон', flag: 'GB', traffic: 1.5, rent: 2.6, wage: 2.1, price: 1.6, tax: 0.25, transport: 1.15, tourism: 1.3, desc: 'Фінансова столиця, дорога оренда, багаті клієнти.' },
+  dubai: { name: 'Дубай', flag: 'AE', traffic: 1.3, rent: 1.9, wage: 1.4, price: 1.4, tax: 0.09, transport: 0.8, tourism: 1.4, desc: 'Туристи, порт і низькі податки.' },
+  tokyo: { name: 'Токіо', flag: 'JP', traffic: 1.75, rent: 2.2, wage: 1.9, price: 1.5, tax: 0.3, transport: 1.05, desc: 'Величезний потік людей і жорстка конкуренція.' },
 };
+const REGION_OF = { kyiv: 'Україна', lviv: 'Україна', odesa: 'Україна', warsaw: 'Європа', berlin: 'Європа', london: 'Європа', dubai: 'Близький Схід', newyork: 'Америка', tokyo: 'Азія' };
 
 // ================= Райони =================
 // zone: retail — магазини/офіси/будівництво; industry — заводи, ферми, логістика.
