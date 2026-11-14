@@ -357,6 +357,7 @@ const LEDGER = {
   dividends: { name: 'Дивіденди', kind: 'inc' },
   subsidiary: { name: 'Прибуток дочірніх компаній', kind: 'inc' },
   bankProfit: { name: 'Прибуток власного банку', kind: 'inc' },
+  subsidy: { name: 'Державні субсидії', kind: 'inc' },
   interestInc: { name: 'Відсотки на рахунку', kind: 'inc' },
   purchases: { name: 'Закупівлі товарів і сировини', kind: 'exp' },
   wages: { name: 'Зарплати персоналу', kind: 'exp' },

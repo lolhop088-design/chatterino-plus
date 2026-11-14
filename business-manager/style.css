@@ -265,3 +265,4 @@ textarea.code { width: 100%; font: 11px/1.3 monospace; background: var(--panel2)
 .bank-body .chip.on { background: #1fb5a0; border-color: #1fb5a0; }
 .bank-body .btn.primary { background: #1fb5a0; border-color: #1fb5a0; }
 @media (max-width: 420px) { .bankcard { width: 130px; } .bc-num { font-size: 12px; } .bank-bal > b { font-size: 22px; } }
+.phase.recovery { color: #7fcf6a; }

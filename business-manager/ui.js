@@ -41,7 +41,7 @@ function avatarSVG(look, size = 40) {
 const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
-  ['hq', '🏛️', 'Штаб'], ['regions', '🌍', 'Регіони'], ['ventures', '🚀', 'Стартапи'], ['sponsor', '🏆', 'Спорт'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
+  ['hq', '🏛️', 'Штаб'], ['world', '🌐', 'Світова економіка'], ['gov', '🏛️', 'Уряд'], ['antitrust', '⚖️', 'Антимонопольний комітет'], ['regions', '🌍', 'Регіони'], ['ventures', '🚀', 'Стартапи'], ['sponsor', '🏆', 'Спорт'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
   ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
@@ -503,6 +503,43 @@ const VIEWS = {
     return html;
   },
 
+  world() {
+    const W = worldState(), h = W.hist.slice(-90);
+    let html = `<h1>🌐 Світова економіка</h1>${econStrip()}<div class="kpis">${Object.entries(COMMODITIES).map(([k, C]) => kpi(`${C.icon} ${C.name}`, `${(commodPrice(k)).toFixed(k === 'metal' ? 0 : 1)} ${C.unit}`, W.commod[k] > 1.15 ? 'neg' : W.commod[k] < 0.88 ? 'pos' : '', `×${W.commod[k].toFixed(2)} до норми`)).join('')}${kpi('⚡ Електроенергія', money(state.econ.power * priceLvl()) + '/МВт·год')}</div>
+      ${W.shocks.length ? `<div class="card warn">${W.shocks.map((s) => `<p>${COMMODITIES[s.c].icon} ${s.mult > 1 ? 'Дефіцит' : 'Надлишок'}: ${COMMODITIES[s.c].name} ×${s.mult} ще ${s.days} дн.</p>`).join('')}</div>` : ''}
+      <div class="grid2">${chartBox('chCom', [{ data: h.map((x) => x.oil), color: '#2b2b2b', name: 'Нафта' }, { data: h.map((x) => x.gas), color: '#e08a3c', name: 'Газ' }, { data: h.map((x) => x.metal), color: '#3f7fc4', name: 'Метали' }, { data: h.map((x) => x.grain), color: '#2e9a5a', name: 'Зерно' }], h.map((x) => String(x.day)), 'Сировина (×до норми)', (v) => v.toFixed(2))}
+      <div class="card"><h3>Валюти міст (за $1)</h3><table class="pl">${Object.keys(FX_BASE).filter((c) => c !== 'USD').map((c) => `<tr><td>${c} · ${Object.keys(CURRENCY_OF).filter((k) => CURRENCY_OF[k] === c).map((k) => CITIES[k].name).join(', ')}</td><td class="${W.fx[c] > FX_BASE[c] * 1.05 ? 'neg' : W.fx[c] < FX_BASE[c] * 0.97 ? 'pos' : ''}">${W.fx[c].toFixed(c === 'JPY' || c === 'UAH' ? 1 : 3)}</td></tr>`).join('')}</table><p class="muted">Слабша валюта здешевлює оренду й місцеві ціни в доларах, але здорожчує імпорт (електроніка, одяг).</p></div></div>
+      <div class="card"><h3>Мита й торгові війни</h3>${W.wars.length ? W.wars.map((w) => `<p>⚔️ ${w.regions.join(' — ')}: мита ${Math.round(w.rate * 100)}% ще ${w.days} дн.</p>`).join('') : '<p class="muted">Зараз торгових війн немає.</p>'}<table class="pl">${[...new Set(Object.values(REGION_OF))].map((r) => `<tr><td>${r}</td><td>${Math.round((W.tariffs[r] || 0) * 100)}% мито на імпорт</td></tr>`).join('')}</table></div>`;
+    return html;
+  },
+
+  gov() {
+    const G = govState(), e = state.econ;
+    let html = `<h1>🏛️ Уряд</h1><div class="kpis">${kpi('Податок на прибуток', pct(e.taxRate, 0))}${kpi('Облікова ставка', e.rate.toFixed(2) + '%')}${kpi('Бюджет за день', money(G.budget.revenue - G.budget.spending), G.budget.revenue < G.budget.spending ? 'neg' : 'pos')}${kpi('Накопичений баланс', moneyK(G.budget.balance), G.budget.balance < 0 ? 'neg' : '')}${kpi('Складність', diff().name)}</div>
+      <div class="cards">${Object.entries(MINISTRIES).map(([k, M]) => { const m = G.ministries[k]; return `<div class="card" style="display:block"><b>${M.icon} ${M.name}</b><br><small class="muted">${M.role}</small><p style="margin:6px 0">Керівник: <b>${esc(m.head)}</b> · ${m.strict > 0.6 ? '<span class="neg">жорсткий курс</span>' : m.strict < 0.4 ? '<span class="pos">ліберальний курс</span>' : 'помірний курс'}</p><small class="muted">Бюджет ${moneyK(m.budget)} · персонал ${m.staff} · з дня ${m.since}</small></div>`; }).join('')}</div>
+      <div class="card"><h3>Субсидії</h3>${G.subsidies.length ? G.subsidies.map((s) => `<p>💶 ${SUBSIDY_TARGETS[s.target].name}: ${Math.round(s.rate * 100)}% фонду оплати праці, до дня ${s.until}</p>`).join('') : '<p class="muted">Зараз немає. Уряд запускає їх у рецесію та кризу.</p>'}</div>
+      <div class="card"><h3>Рішення уряду</h3><ul class="log">${G.decisions.slice(0, 30).map((d) => `<li><small>Д${d.day}</small> ${esc(d.text)}</li>`).join('') || '<li class="muted">Поки рішень немає.</li>'}</ul></div>`;
+    return html;
+  },
+
+  antitrust() {
+    const G = govState(), markets = Object.values(marketShares()).filter((M) => M.n >= 4);
+    const mine = markets.map((M) => ({ M, s: (M.by.player || 0) / M.total })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
+    const top = [];
+    for (const M of markets) for (const [g, w] of Object.entries(M.by)) if (g !== 'player' && g !== 'local' && w / M.total >= 0.4) top.push({ g, M, s: w / M.total });
+    top.sort((a, b) => b.s - a.s);
+    const open = G.cases.filter((c) => c.stage !== 'closed');
+    const lvl = (s) => { const L = shareLevel(s); return `<span class="${L[2]}">${L[1]}</span>`; };
+    let html = `<h1>⚖️ Антимонопольний комітет</h1><div class="kpis">${kpi('Відкритих справ проти вас', open.filter((c) => c.target === 'player').length, open.some((c) => c.target === 'player') ? 'neg' : '')}${kpi('Ваших порушень', G.violations.player || 0)}${kpi('Юридичний захист', LAW_FIRMS[G.lawFirm].name)}${kpi('Суворість комітету', pct(strictness('antitrust'), 0))}</div>
+      <div class="card"><p class="muted">Ігрові пороги ризику (не автоматичне порушення): 0–20% звичайна конкуренція · 20–40% великий гравець · 40–60% посилений контроль · 60–80% високий ризик монополізації · 80–100% особлива увага. Ринок — формат магазинів у місті; дочірні компанії рахуються разом із вами. Ті самі правила діють для ІІ-корпорацій.</p></div>
+      <div class="card"><h3>Юридичний захист</h3><p class="muted">Юристи сповільнюють збір доказів і підвищують шанси на апеляцію. Юридичний відділ і бухгалтерія теж допомагають.</p><div class="chips">${LAW_FIRMS.map((L, i) => `<button class="chip ${G.lawFirm === i ? 'on' : ''}" data-act="lawFirm" data-v="${i}">${L.name}${L.cost ? ` · ${moneyK(L.cost * priceLvl())}/д` : ''}</button>`).join('')}</div></div>
+      <div class="card"><h3>Ваші частки ринку</h3>${mine.length ? `<div class="table-wrap"><table><thead><tr><th>Ринок</th><th>Частка</th><th>Рівень</th></tr></thead><tbody>${mine.map(({ M, s }) => `<tr><td>${marketName(M.key)}</td><td>${pct(s, 0)}</td><td>${lvl(s)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Немає ринків із вашою присутністю (мінімум 4 точки на ринку).</p>'}
+        ${G.floors.length || G.bans.some((b) => b.target === 'player') ? `<p class="neg">${G.floors.map((f) => `Мінімальна ціна 95% ринкової: ${marketName(f.city + '|' + f.type)} до дня ${f.until}`).concat(G.bans.filter((b) => b.target === 'player').map((b) => `Заборона нових точок: ${marketName(b.city + '|' + b.type)} до дня ${b.until}`)).join('<br>')}</p>` : ''}</div>
+      <div class="card"><h3>Справи</h3>${G.cases.length ? G.cases.slice(0, 25).map((c) => `<div class="stock"><div><b>${c.id}</b> · ${esc(groupName(c.target))}${c.target === 'player' ? ' <span class="tag bad">ви</span>' : ''}<br><small>${CASE_TYPES[c.type]} · ${c.market ? marketName(c.market) : 'B2B'} · частка ${pct(c.share, 0)} · ${esc(c.why)}</small><br><small>${c.stage === 'investigation' ? `розслідування до дня ${c.due} · докази ${Math.round(c.evidence)}/100` : c.stage === 'appeal' ? `апеляція, рішення суду в день ${c.appealDue}` : esc(c.outcome || '')}</small></div><div class="px">${c.fine ? moneyK(c.fine) : ''}</div><span></span>${c.target === 'player' && c.stage === 'decided' && state.day <= c.appealUntil ? `<div class="trade"><button class="btn sm primary" data-act="appeal" data-id="${c.id}">👨‍⚖️ Оскаржити · ${moneyK(appealCost())}</button><button class="btn sm" data-act="acceptCase" data-id="${c.id}">Прийняти рішення</button></div>` : ''}</div>`).join('') : '<p class="muted">Справ ще не було.</p>'}</div>
+      <div class="card"><h3>Домінуючі конкуренти</h3>${top.length ? top.slice(0, 12).map((x) => `<p>${esc(groupName(x.g))} — ${marketName(x.M.key)}: ${pct(x.s, 0)} · ${lvl(x.s)}</p>`).join('') : '<p class="muted">Жоден конкурент не має понад 40% ринку.</p>'}</div>`;
+    return html;
+  },
+
   ventures() {
     const V = vcState();
     const st = V.stats;
@@ -860,6 +897,7 @@ function startPrompt(canCancel) {
       <label>Назва компанії <input id="coName" maxlength="32" value="Коваль Груп"></label></div></div>
     <label>Шкіра</label>${sw('skin')}<label>Волосся</label>${sw('hair')}<label>Одяг</label>${sw('shirt')}
     <div class="chips filter">${AVATAR.style.map((s) => `<button class="chip ${look.style === s ? 'on' : ''}" data-act="look" data-k="style" data-v="${s}">${{ short: 'Коротке', long: 'Довге', bun: 'Пучок', bald: 'Лисий' }[s]}</button>`).join('')}</div>
+    <label>Складність</label><div class="citylist">${Object.entries(DIFFICULTY).map(([k, D]) => `<label class="cityopt"><input type="radio" name="diff" value="${k}" ${k === 'normal' ? 'checked' : ''}><span><b>${D.name}</b> <small class="muted">старт ${moneyK(D.cash)}</small><br><small>${D.desc}</small></span></label>`).join('')}</div>
     <label>Місто</label><div class="citylist">${Object.entries(CITIES).map(([k, C], i) => `<label class="cityopt"><input type="radio" name="city" value="${k}" ${i === 0 ? 'checked' : ''}><span><b>${C.name}</b> <small class="muted">${C.flag}</small><br><small>${C.desc}</small></span></label>`).join('')}</div>
     <div class="row end">${canCancel ? '<button class="btn" data-act="modalClose">Скасувати</button>' : ''}<button class="btn primary" data-act="startGame">Почати з $4 000</button></div>`);
 }
@@ -950,6 +988,9 @@ const ACT = {
   bankLend: (d) => bankLendToCorp(+d.v),
   bankRepay: () => bankRepayCorp(state.bank.internal),
   bankRefi: () => bankRefinance(),
+  lawFirm: (d) => { govState().lawFirm = +d.v; },
+  appeal: (d) => confirmBox(`Подати апеляцію за ${money(appealCost())}? Суд вирішить за 20 днів.`, () => fileAppeal(d.id)),
+  acceptCase: (d) => { const c = govState().cases.find((x) => x.id === d.id); if (c) c.stage = 'closed'; },
   vcDD: (d) => vcDueDiligence(d.id),
   vcInvest: (d) => { const p = vcState().pitches.find((x) => x.id === d.id); confirmBox(`Інвестувати ${money(p.ask)} у «${esc(p.name)}»?`, () => vcInvest(d.id)); },
   vcSell: (d) => vcSell(d.id),
@@ -1000,7 +1041,8 @@ const ACT = {
     const nm = document.getElementById('meName').value.trim(), co = document.getElementById('coName').value.trim();
     const c = document.querySelector('input[name=city]:checked');
     hideModal();
-    newGame({ name: nm, company: co, city: c ? c.value : 'kyiv', look: { ...window._draftLook } });
+    const df = document.querySelector('input[name=diff]:checked');
+    newGame({ name: nm, company: co, city: c ? c.value : 'kyiv', difficulty: df ? df.value : 'normal', look: { ...window._draftLook } });
     save(); setSpeed(1);
   },
   modalClose: () => hideModal(),

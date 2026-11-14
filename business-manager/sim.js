@@ -12,7 +12,7 @@ const weekday = (day = state.day) => (day - 1) % 7;
 // Багатомістовість: кожна ділянка належить місту; ціни, оренда й потік рахуються за містом ділянки.
 const lotCityId = (l) => (l && l.city) || state.city;
 const cityOfLot = (l) => CITIES[lotCityId(l)] || city();
-const priceAtLot = (l) => state.econ.priceLevel * cityOfLot(l).price;
+const priceAtLot = (l) => state.econ.priceLevel * cityOfLot(l).price * (state.world ? fxPriceFactor(lotCityId(l)) : 1);
 const priceAt = (u) => (u && u.lotId ? priceAtLot(lotById(u.lotId)) : priceLvl());
 const viewCity = () => (state.ui.mapCity && state.unlocked && state.unlocked[state.ui.mapCity] ? state.ui.mapCity : state.city);
 
@@ -22,7 +22,7 @@ function newGame(o = {}) {
   state = {
     v: 2, company: o.company || 'Моя компанія', city: o.city || 'kyiv',
     me: { name: o.name || 'Підприємець', look: o.look || { skin: AVATAR.skin[1], hair: AVATAR.hair[0], shirt: AVATAR.shirt[0], style: 'short' }, job: null, jobDays: 0, home: 'room', homeProp: null, skills: { business: 1, coding: 0, management: 0 }, credit: 620 },
-    cash: 4000, day: 1, hour: 6, speed: 1,
+    cash: (DIFFICULTY[o.difficulty] || DIFFICULTY.normal).cash, difficulty: DIFFICULTY[o.difficulty] ? o.difficulty : 'normal', day: 1, hour: 6, speed: 1,
     econ: { phase: 'growth', phaseDays: ri(40, 80), growth: 2.5, inflation: 4, rate: 6.5, unemployment: 7, priceLevel: 1, wageLevel: 1, housing: 1, demand: 1, fx: 41, taxRate: C.tax, power: 80, hist: [] },
     market: {}, lots: [], biz: [], fac: [], staff: [], candidates: [], loans: [], mods: [], props: [], projects: [], carModels: [],
     wh: { goods: {} }, autoSell: {}, orders: [], companies: [], portfolio: {}, ipo: null,
@@ -131,7 +131,7 @@ const staffOf = (u) => state.staff.filter((p) => p.unit === u.id);
 const propById = (id) => state.props.find((p) => p.id === id);
 const unitRole = (u) => (u.kind ? FACILITIES[u.kind].role : 'sales');
 const effSkill = (p, role) => p.skill * (p.role === role ? 1 : 0.55) * (0.6 + 0.4 * p.morale / 100);
-const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * cityOfLot(lot).rent * state.econ.housing);
+const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * cityOfLot(lot).rent * state.econ.housing * (state.world ? fxPriceFactor(lotCityId(lot)) : 1));
 const debt = () => sum(state.loans, (l) => l.amount);
 const modMult = (kind, key) => { let m = 1; for (const md of state.mods) if (md.kind === kind && (md.key == null || md.key === key)) m *= md.mult; return m; };
 function maxStaff(u) {
@@ -170,7 +170,7 @@ function ensureProducts(b) {
 const fairPrice = (p, b) => p.price * (b ? priceAt(b) : priceLvl());
 function wholesale(b, p) {
   const T = TYPES[b.type];
-  return p.cost * priceAt(b) * modMult('wholesale') * modMult('supplier', b.type) * (T.import ? state.econ.fx / 41 : 1);
+  return p.cost * priceAt(b) * modMult('wholesale') * modMult('supplier', b.type) * (T.import ? (state.world ? importFactor(lotCityId(lotOf(b))) : state.econ.fx / 41) : 1) * (p.good && !p.carOnly && state.world ? Math.sqrt(commodFactor(p.good)) : 1);
 }
 function competitors(b) {
   const lot = lotOf(b);
@@ -245,6 +245,7 @@ function openBusiness(lotId, type, silent = false) {
   if (!lot || lot.npc || lot.owner) return;
   const T = TYPES[type];
   if (T.minSize && SIZE_ORDER.indexOf(lot.size) < SIZE_ORDER.indexOf(T.minSize)) return toast('Замале приміщення.', 'bad');
+  if (typeof isBanned === 'function' && isBanned(type, lotCityId(lot))) return toast('Рішенням АМКУ вам тимчасово заборонено відкривати такі точки в цьому місті.', 'bad');
   const setup = setupCost(type, lot), cost = setup + lotRent(lot) * 7;
   if (state.cash < cost) return toast('Недостатньо коштів.', 'bad');
   book('capex', -cost);
@@ -346,7 +347,7 @@ function whTake(g, qty) {
   if (x.qty <= 1e-6) delete state.wh.goods[g];
   return c;
 }
-const mktPrice = (g) => GOODS[g].price * priceLvl() * state.market[g].mult;
+const mktPrice = (g) => GOODS[g].price * priceLvl() * state.market[g].mult * (state.world ? commodFactor(g) : 1);
 const sellPrice = (g) => mktPrice(g) * (0.93 + 0.025 * state.depts.sales);
 const buyPrice = (g) => mktPrice(g) * 1.05;
 const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount();
@@ -766,7 +767,7 @@ function staffDaily() {
 }
 
 // ================= Банк =================
-const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12;
+const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12 + (state.difficulty ? diff().rate : 0);
 function creditLimit() {
   const assets = state.cash + inventoryValue() + fixedAssets() + sum(state.props.filter((p) => p.owned && !p.mortgage), propValue);
   return Math.max(0, Math.round(Math.max(5000 * priceLvl(), assets * 0.5) * clamp(state.me.credit / 700, 0.4, 1.2) - debt()));
@@ -805,18 +806,23 @@ function bankDaily() {
 const PHASES = {
   growth: { name: 'Зростання', g: 2.5, i: 4, u: 6.5, pe: 1, next: [['boom', 0.3], ['growth', 0.4], ['recession', 0.3]] },
   boom: { name: 'Бум', g: 6, i: 8, u: 4.5, pe: 1.25, next: [['recession', 0.6], ['growth', 0.4]] },
-  recession: { name: 'Рецесія', g: -1.5, i: 2.5, u: 9.5, pe: 0.8, next: [['growth', 0.6], ['crisis', 0.2], ['recession', 0.2]] },
-  crisis: { name: 'Криза', g: -5, i: -0.5, u: 13, pe: 0.6, next: [['recession', 1]] },
+  recession: { name: 'Рецесія', g: -1.5, i: 2.5, u: 9.5, pe: 0.8, next: [['recovery', 0.5], ['crisis', 0.2], ['recession', 0.3]] },
+  crisis: { name: 'Криза', g: -5, i: -0.5, u: 13, pe: 0.6, next: [['recovery', 0.7], ['recession', 0.3]] },
+  recovery: { name: 'Відновлення', g: 1.5, i: 2.5, u: 8.5, pe: 0.9, next: [['growth', 0.75], ['recession', 0.25]] },
 };
 function econDaily() {
   const e = state.econ;
   if (--e.phaseDays <= 0) {
-    let r = Math.random(), nx = 'growth';
-    for (const [p, w] of PHASES[e.phase].next) { if ((r -= w) <= 0) { nx = p; break; } }
+    const D = typeof diff === 'function' ? diff() : { crisis: 1 };
+    const opts = PHASES[e.phase].next.map(([p, w]) => [p, p === 'recession' || p === 'crisis' ? w * D.crisis : w]);
+    const tot = sum(opts, (o) => o[1]);
+    let r = Math.random() * tot, nx = 'growth';
+    for (const [p, w] of opts) { if ((r -= w) <= 0) { nx = p; break; } }
     if (nx !== e.phase) {
-      const txt = { boom: '📈 Економіка входить у фазу буму: попит росте, але й інфляція теж.', growth: '🌤️ Економіка стабілізувалась і повернулась до помірного зростання.', recession: '📉 Рецесія: споживачі скорочують витрати, безробіття росте.', crisis: '🚨 Фінансова криза! Ринки падають, банки посилюють умови.' }[nx];
-      news(txt, 'econ', nx === 'boom' || nx === 'growth' ? 'good' : 'bad');
-      log(txt, nx === 'boom' || nx === 'growth' ? 'good' : 'bad');
+      const txt = { recovery: '🌱 Економіка відновлюється після спаду: попит поступово повертається.', boom: '📈 Економіка входить у фазу буму: попит росте, але й інфляція теж.', growth: '🌤️ Економіка стабілізувалась і повернулась до помірного зростання.', recession: '📉 Рецесія: споживачі скорочують витрати, безробіття росте.', crisis: '🚨 Фінансова криза! Ринки падають, банки посилюють умови.' }[nx];
+      const good = nx === 'boom' || nx === 'growth' || nx === 'recovery';
+      news(txt, 'econ', good ? 'good' : 'bad');
+      log(txt, good ? 'good' : 'bad');
     }
     e.phase = nx; e.phaseDays = nx === 'crisis' ? ri(20, 45) : ri(45, 120);
   }
@@ -834,7 +840,7 @@ function econDaily() {
   e.housing = clamp(e.housing * (1 + (e.growth * 0.8 - (e.rate - 5) * 0.6 + e.inflation * 0.5) / 100 / 365 + gauss() * 0.001), 0.4, 6);
   e.demand = clamp(1 + (e.growth - 2.5) * 0.035 - (e.unemployment - 6.5) * 0.02 - (e.rate - 6.5) * 0.008, 0.55, 1.35);
   e.fx = clamp(e.fx * (1 + gauss() * 0.003 + (e.inflation - 3) / 100 / 365 * 0.5), 20, 120);
-  e.power = 80 * Math.sqrt(state.market.oil.mult);
+  e.power = 80 * (state.world ? electricityIndex() : Math.sqrt(state.market.oil.mult));
   for (const g of Object.keys(GOODS)) { const m = state.market[g]; m.mult = clamp(m.mult + (1 - m.mult) * 0.05 + gauss() * 0.012, 0.35, 3); }
   e.hist.push({ day: state.day, growth: e.growth, inflation: e.inflation, rate: e.rate, unemp: e.unemployment, demand: e.demand, cpi: e.priceLevel, housing: e.housing });
   if (e.hist.length > 365) e.hist.shift();
@@ -867,8 +873,9 @@ function aiDaily() {
     // розширення в місті
     if (TYPES[co.sector] && co.cash > 2e6 * co.scale && chance(0.025)) {
       // Конкуренти не займають понад 60% торгових ділянок міста — гравцю має лишатися місце.
+      const banned = (l) => state.gov && state.gov.bans.some((x) => x.target === co.id && x.city === lotCityId(l) && x.type === co.sector);
       const crowded = (cid) => { const ls = state.lots.filter((x) => lotCityId(x) === cid && DMAP[x.district].zone === 'retail'); return ls.filter((x) => x.npc).length >= ls.length * 0.6; };
-      const free = state.lots.filter((l) => !l.npc && !l.owner && DMAP[l.district].zone === 'retail' && !crowded(lotCityId(l)) && (!TYPES[co.sector].minSize || SIZE_ORDER.indexOf(l.size) >= SIZE_ORDER.indexOf(TYPES[co.sector].minSize)));
+      const free = state.lots.filter((l) => !l.npc && !l.owner && DMAP[l.district].zone === 'retail' && !crowded(lotCityId(l)) && !banned(l) && (!TYPES[co.sector].minSize || SIZE_ORDER.indexOf(l.size) >= SIZE_ORDER.indexOf(TYPES[co.sector].minSize)));
       if (free.length) {
         const l = pick(free); l.npc = { co: co.id, type: co.sector }; co.cash -= 150000 * priceLvl();
         news(`🏬 «${co.name}» відкриває ${TYPES[co.sector].name.toLowerCase()} у районі «${DMAP[l.district].name}».`, 'corp');
@@ -900,8 +907,11 @@ function aiDaily() {
       const affordable = aliveCos().filter((c) => c !== b && !isSub(c) && c.price * c.shares * 1.3 < b.cash);
       const same = affordable.filter((c) => c.sector === b.sector);
       const targets = same.length && chance(0.7) ? same : affordable;
-      if (targets.length) {
-        const t = pick(targets), prem = t.price * 1.3;
+      const t0 = targets.length ? pick(targets) : null;
+      const rv = t0 && typeof reviewMerger === 'function' ? reviewMerger(b.id, t0) : { ok: true };
+      if (t0 && !rv.ok) news(`⚖️ АМКУ заблокував злиття «${b.name}» і «${t0.name}»: ${rv.reason}.`, 'econ');
+      if (t0 && rv.ok) {
+        const t = t0, prem = t.price * 1.3;
         b.acquired = (b.acquired || []).concat(t.name).slice(-6);
         b.cash -= prem * t.shares;
         for (const l of state.lots) if (l.npc && l.npc.co === t.id) l.npc.co = b.id;
@@ -982,6 +992,9 @@ function unlockCity(cid) {
 }
 /** Сумісність зі старими збереженнями (одне місто). */
 function migrateState() {
+  if (!state.difficulty) state.difficulty = 'normal';
+  if (typeof worldState === 'function') worldState();
+  if (typeof govState === 'function') govState();
   if (!state.unlocked) state.unlocked = { [state.city]: true };
   for (const l of state.lots) if (!l.city) l.city = state.city;
   if (!state.contracts) state.contracts = {};
@@ -1003,9 +1016,19 @@ function acquireCompany(id) {
   if (!co || !co.alive || isSub(co)) return;
   const price = takeoverPrice(co);
   if (state.cash < price) return toast(`Для поглинання потрібно ${moneyK(price)}.`, 'bad');
+  const review = typeof reviewMerger === 'function' ? reviewMerger('player', co) : { ok: true };
+  if (!review.ok) {
+    news(`⚖️ АМКУ заблокував поглинання «${co.name}» компанією ${state.company}: ${review.reason}.`, 'econ', 'bad');
+    return toast(`АМКУ заблокував злиття: ${review.reason}.`, 'bad');
+  }
   book('shares', -price);
   delete state.portfolio[co.id];
   co.owner = 'player'; co.payout = 1; co.boughtFor = price; co.boughtDay = state.day;
+  if (review.divest) {
+    const M = review.divest, lots = state.lots.filter((l) => l.npc && l.npc.co === co.id && l.npc.type === M.type && lotCityId(l) === M.city);
+    for (const l of lots.slice(0, Math.ceil(lots.length / 2))) l.npc = null;
+    news(`⚖️ АМКУ погодив поглинання «${co.name}» з умовою: продати ${Math.ceil(lots.length / 2)} точок на ринку «${marketName(M.key)}».`, 'econ');
+  }
   const shops = state.lots.filter((l) => l.npc && l.npc.co === co.id).length;
   news(`🤝 ${state.company} поглинає «${co.name}» за ${moneyK(price)}.`, 'corp', 'good');
   log(`🤝 Поглинуто «${co.name}» (${SECTORS[co.sector].name}, ${shops} точок у місті) за ${money(price)}.`, 'good');
@@ -1289,6 +1312,7 @@ function endOfDay() {
   state.tech.points += state.depts.rnd * 12;
   staffDaily();
   bankDaily();
+  if (typeof worldDaily === 'function') worldDaily();
   econDaily();
   aiDaily();
   // підсумок дня
@@ -1314,7 +1338,7 @@ function endOfDay() {
   for (const f of HOOKS.day) f();
   checkAchievements();
   // банкрутство
-  const lim = -15000 * priceLvl();
+  const lim = -diff().bankrupt * priceLvl();
   state.negDays = state.cash < lim ? state.negDays + 1 : 0;
   if (state.negDays >= 3) gameOver();
   else if (state.cash < 0) toast('⚠️ Від’ємний баланс! Скоротіть витрати або візьміть кредит.', 'bad');
