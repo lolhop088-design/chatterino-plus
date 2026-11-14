@@ -359,6 +359,9 @@ const LEDGER = {
   bankProfit: { name: 'Прибуток власного банку', kind: 'inc' },
   subsidy: { name: 'Державні субсидії', kind: 'inc' },
   interestInc: { name: 'Відсотки на рахунку', kind: 'inc' },
+  media: { name: 'Медіабізнес (чистий)', kind: 'inc' },
+  legal: { name: 'Судові компенсації', kind: 'inc' },
+  insurancePay: { name: 'Страхові виплати', kind: 'inc' },
   purchases: { name: 'Закупівлі товарів і сировини', kind: 'exp' },
   wages: { name: 'Зарплати персоналу', kind: 'exp' },
   rent: { name: 'Оренда приміщень', kind: 'exp' },
@@ -372,6 +375,10 @@ const LEDGER = {
   living: { name: 'Особисті витрати', kind: 'exp' },
   fines: { name: 'Штрафи', kind: 'exp' },
   tax: { name: 'Податки', kind: 'exp' },
+  security: { name: 'Охорона і безпека', kind: 'exp' },
+  insurance: { name: 'Страхування', kind: 'exp' },
+  crimeLoss: { name: 'Кримінальні збитки', kind: 'exp' },
+  politics: { name: 'Політика і лобіювання', kind: 'exp' },
   capex: { name: 'Капітальні вкладення', kind: 'cash' },
   propTrade: { name: 'Купівля/продаж нерухомості', kind: 'cash' },
   shares: { name: 'Операції з акціями', kind: 'cash' },
@@ -400,9 +407,9 @@ function log(msg, kind = '') {
   state.log.unshift({ day: state.day, hour: state.hour, msg, kind });
   if (state.log.length > 120) state.log.length = 120;
 }
-function news(text, cat = 'econ', kind = '') {
+function news(text, cat = 'econ', kind = '', breaking = false) {
   if (!state) return;
-  state.news.unshift({ day: state.day, cat, text, kind });
+  state.news.unshift(breaking ? { day: state.day, cat, text, kind, breaking: true } : { day: state.day, cat, text, kind });
   if (state.news.length > 150) state.news.length = 150;
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* сховище недоступне */ } }

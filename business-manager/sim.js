@@ -184,7 +184,7 @@ function competitors(b) {
   return s * modMult('pricewar', b.type);
 }
 function trafficMult(districtId, type, C = city()) {
-  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
   if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
   if (wd >= 5) {
@@ -856,7 +856,7 @@ function aiDaily() {
     const S = SECTORS[co.sector];
     const shops = state.lots.filter((l) => l.npc && l.npc.co === co.id).length;
     co.influence = isSub(co) ? 1 : playerInfluence(co);
-    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl() * co.influence * (co.volMult || 1);
+    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl() * co.influence * (co.volMult || 1) * (co.prMult || 1);
     let profit = rev * S.margin * co.eff * (co.marginMult || 1) - S.rev * co.scale * 0.02 * (e.phase === 'crisis' ? 1.5 : 1);
     if (chance(0.01)) profit -= rev * rnd(0.5, 3); // разові збитки
     co.cash += profit;
@@ -1000,6 +1000,9 @@ function migrateState() {
   if (!state.unlocked) state.unlocked = { [state.city]: true };
   for (const l of state.lots) if (!l.city) l.city = state.city;
   if (!state.contracts) state.contracts = {};
+  if (typeof mediaState === 'function') mediaState();
+  if (typeof crimeState === 'function') crimeState();
+  if (typeof polState === 'function') polState();
 }
 
 // ================= Поглинання компаній =================
@@ -1132,7 +1135,7 @@ function doIPO(pct) {
 }
 function ipoDaily() {
   const I = state.ipo, ph = PHASES[state.econ.phase];
-  const fair = Math.max(0.1, (netWorth() + Math.max(0, avgProfit()) * 365 * 12 * ph.pe) / I.shares);
+  const fair = Math.max(0.1, (netWorth() + Math.max(0, avgProfit()) * 365 * 12 * ph.pe) / I.shares) * (state.media ? 0.8 + 0.4 * state.media.corpRep / 100 : 1);
   I.price = Math.max(0.05, I.price * Math.exp(gauss() * 0.015) + (fair - I.price) * 0.05);
   I.hist.push(+I.price.toFixed(2)); if (I.hist.length > 120) I.hist.shift();
 }
@@ -1381,6 +1384,11 @@ const ACHIEVEMENTS = [
   { id: 'unicorn', icon: '🦄', name: 'Єдиноріг', desc: 'Вихід зі стартапу-єдинорога', check: (s) => !!(s.vc && s.vc.done.some((d) => d.tier === 'unicorn' && d.got > d.invested)) },
   { id: 'sponsor', icon: '🤝', name: 'Меценат спорту', desc: 'Спонсоруйте команду', check: (s) => !!(s.sport && s.sport.teams.some((t) => t.sponsor === 'player')) },
   { id: 'champion', icon: '🏆', name: 'Чемпіон', desc: 'Ваша команда виграла сезон', check: (s) => !!(s.sport && s.sport.trophies > 0) },
+  { id: 'mogul', icon: '📡', name: 'Медіамагнат', desc: 'Володійте 3 медіа', check: (s) => !!(s.media && s.media.outlets.filter((o) => o.owner === 'player').length >= 3) },
+  { id: 'party', icon: '🗳️', name: 'Політик', desc: 'Заснуйте власну партію', check: (s) => !!(s.pol && s.pol.me.party) },
+  { id: 'mayor', icon: '🏙️', name: 'Мер', desc: 'Виграйте вибори мера', check: (s) => !!(s.pol && s.pol.me.posts.some((p) => p.startsWith('mayor:'))) },
+  { id: 'president', icon: '🎖️', name: 'Президент', desc: 'Станьте президентом країни', check: (s) => !!(s.pol && s.pol.me.office === 'president') },
+  { id: 'fortress', icon: '🛡️', name: 'Фортеця', desc: 'Цілодобова охорона на всіх об’єктах і елітна особиста охорона', check: (s) => !!(s.crime && s.crime.guard === 3 && [...s.biz, ...s.fac].length >= 3 && [...s.biz, ...s.fac].every((u) => u.sec === 3)) },
   { id: 'banker', icon: '🏦', name: 'Банкір', desc: 'Отримайте банківську ліцензію', check: (s) => !!s.bank },
   { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
   { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },

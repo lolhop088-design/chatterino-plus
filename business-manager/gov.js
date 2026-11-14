@@ -270,7 +270,7 @@ function govDaily() {
   }
   // Місячні рішення
   if (state.day % 30 === 0) monthlyPolicy();
-  if (state.day % 180 === 0) {
+  if (!state.pol && state.day % 180 === 0) { // після появи політики призначення робить уряд/парламент
     const k = pick(Object.keys(MINISTRIES)), M = G.ministries[k];
     M.head = pick(OFFICIALS.filter((n) => n !== M.head)); M.strict = +rnd(0.25, 0.85).toFixed(2); M.since = state.day;
     govDecide(`Новий керівник: ${MINISTRIES[k].name} очолив(-ла) ${M.head} (${M.strict > 0.6 ? 'жорсткий курс' : M.strict < 0.4 ? 'ліберальний курс' : 'помірний курс'}).`);
