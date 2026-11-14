@@ -115,6 +115,7 @@ function suitGrounds(coId) {
   const co = coById(coId), g = [];
   if (!co) return g;
   if (state.corp && state.corp.drugs.some((x) => x.copied === coId)) g.push('patent');
+  if (state.sci && state.sci.patents.some((p) => p.infringer === coId)) g.push('patent');
   if ((state.tech.retail + state.tech.industry + state.tech.it) > (co.tech || 0) * 2 && co.strat === 'innovator') g.push('patent');
   if ((co.rivalry || 0) > 0.5) g.push('unfair');
   if (warState().incidents.some((i) => i.by === coId)) g.push('espionage');
@@ -144,6 +145,7 @@ function decideSuit(s) {
   if (win) pay(s.defendant, s.plaintiff, award);
   else pay(s.plaintiff, s.defendant, Math.round(s.claim * 0.03)); // відшкодування судових витрат
   if (win && s.type === 'patent' && s.plaintiff === 'player' && state.corp) for (const x of state.corp.drugs) if (x.copied === s.defendant) x.copied = null;
+  if (win && s.type === 'patent' && s.plaintiff === 'player' && state.sci) for (const p of state.sci.patents) if (p.infringer === s.defendant) { p.infringer = null; p.licensees.push(s.defendant); }
   news(`⚖️ Суд у справі ${s.id} (${coName2(s.plaintiff)} проти ${coName2(s.defendant)}): ${s.outcome}.`, 'business', (s.plaintiff === 'player') === win ? 'good' : s.defendant === 'player' || s.plaintiff === 'player' ? 'bad' : '');
 }
 

@@ -1064,6 +1064,7 @@ const ACT = {
     hideModal();
     const df = document.querySelector('input[name=diff]:checked');
     newGame({ name: nm, company: co, city: c ? c.value : 'kyiv', difficulty: df ? df.value : 'normal', look: { ...window._draftLook } });
+    if (typeof GAME_VERSION !== 'undefined') state.seenVersion = GAME_VERSION;
     save(); setSpeed(1);
   },
   modalClose: () => hideModal(),
@@ -1148,6 +1149,7 @@ function boot() {
   if (loadSave() && state && !state.over) {
     migrateState();
     render(true); setSpeed(0);
+    if (typeof checkWhatsNew === 'function') checkWhatsNew();
     toast('Гру завантажено. Натисніть ▶, щоб продовжити.');
   } else startPrompt(false);
 }

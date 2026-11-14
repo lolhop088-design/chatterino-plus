@@ -360,6 +360,7 @@ const LEDGER = {
   subsidy: { name: 'Державні субсидії', kind: 'inc' },
   interestInc: { name: 'Відсотки на рахунку', kind: 'inc' },
   divRev: { name: 'Виручка галузевих підрозділів', kind: 'inc' },
+  infraRev: { name: 'Концесії (інфраструктура)', kind: 'inc' },
   media: { name: 'Медіабізнес (чистий)', kind: 'inc' },
   legal: { name: 'Судові компенсації', kind: 'inc' },
   insurancePay: { name: 'Страхові виплати', kind: 'inc' },

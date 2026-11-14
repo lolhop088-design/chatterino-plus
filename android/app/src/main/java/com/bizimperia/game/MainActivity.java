@@ -23,6 +23,9 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true); // localStorage для збережень
         s.setTextZoom(100);
+        // Файли гри оновлюються разом з APK: не беремо старі копії з кешу WebView.
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        web.clearCache(true);
         web.setWebViewClient(new WebViewClient());
         web.setBackgroundColor(0xFF11141B);
         FrameLayout root = new FrameLayout(this);

@@ -375,6 +375,62 @@ const City3D = (() => {
     }
     for (const [id, o] of lotObjs) if (!seen.has(id)) { disposeLot(o); lotObjs.delete(id); }
     pickables = [...lotObjs.values()].map((o) => o.pk);
+    try { syncInfra(vc); } catch (e) { console.error(e); }
+  }
+
+
+  // ---------- інфраструктура міста (рівні з city.js) ----------
+  let infraMesh = null, infraSig = '';
+  function syncInfra(vc) {
+    const sig = typeof infraKey3d === 'function' ? vc + ':' + infraKey3d(vc) : '';
+    if (sig === infraSig) return;
+    infraSig = sig;
+    if (infraMesh) { scene.remove(infraMesh); infraMesh.geometry.dispose(); infraMesh = null; }
+    const D = state.cities && state.cities.c[vc]; if (!D) return;
+    const L = D.lv, gb = new GB(), R = seeded(777);
+    if (L.roads) { // кільцева магістраль
+      for (const z of [-140]) gb.box(300, 0.05, 7, 0, 0.02, z, '#2b2f36');
+      for (const x of [-150, 150]) gb.box(7, 0.05, 250, x, 0.02, -15, '#2b2f36');
+      for (let s = -140; s < 140; s += 9) gb.box(3, 0.02, 0.4, s, 0.08, -140, '#e8e4cf');
+      if (L.roads >= 3) for (const x of [-96, 96]) { gb.box(8, 0.8, 18, x, 5, -140, '#9aa0a8'); gb.box(1.2, 5, 1.2, x, 0, -146, '#8a9098'); gb.box(1.2, 5, 1.2, x, 0, -134, '#8a9098'); }
+    }
+    for (let i = 0; i < L.bridges; i++) { // мости через воду
+      const x = -160 + i * 75;
+      gb.box(6, 0.9, 150, x, 5, WATER_Z + 75, '#b8b2a6');
+      for (let z = WATER_Z + 10; z < WATER_Z + 150; z += 28) gb.box(2, 5, 2, x, 0, z, '#8f8a80');
+      gb.box(0.4, 1.2, 150, x - 2.8, 5.9, WATER_Z + 75, '#d9534f'); gb.box(0.4, 1.2, 150, x + 2.8, 5.9, WATER_Z + 75, '#d9534f');
+    }
+    if (L.rail) { // залізниця й потяги
+      gb.box(320, 0.3, 4, 0, 0, -160, '#6e665c');
+      for (const dz of [-0.9, 0.9]) gb.box(320, 0.25, 0.25, 0, 0.3, -160 + dz, '#c9c9c9');
+      for (let t = 0; t < L.rail; t++) for (let c = 0; c < 4; c++) gb.box(9, 3.2, 3, -120 + t * 70 + c * 10, 0.5, -160, c ? '#2f6aa8' : '#d9534f', true);
+    }
+    if (L.airport) { // аеропорт
+      const ax = -235, az = -40;
+      gb.box(16, 0.1, 150, ax, 0.02, az, '#4a4f57');
+      for (let z = az - 70; z < az + 70; z += 10) gb.box(0.8, 0.05, 5, ax, 0.14, z, '#f2f2f2');
+      gb.box(36, 9 + L.airport * 2, 14, ax + 30, 0, az, '#c7d3dd', true);
+      gb.cyl(1.5, 2, 20, ax + 30, 0, az - 18, '#e6e6e6'); gb.box(5, 3, 5, ax + 30, 20, az - 18, '#5b9be0');
+      for (let i = 0; i < L.airport; i++) { const pz = az - 50 + i * 22; gb.box(2.2, 2.2, 14, ax + 18, 0.6, pz, '#f4f4f4'); gb.box(16, 0.4, 3, ax + 18, 1.6, pz, '#f4f4f4'); gb.box(5, 3, 1.2, ax + 18, 2, pz + 6, '#d9534f'); }
+    }
+    for (let i = 0; i < L.port; i++) { // додаткові крани й судна
+      const cx = 30 + i * 26;
+      gb.box(1, 18, 1, cx - 2, 0, WATER_Z - 1, '#3f7fc4'); gb.box(1, 18, 1, cx + 2, 0, WATER_Z - 1, '#3f7fc4'); gb.box(1.2, 1.2, 24, cx, 18, WATER_Z + 7, '#3f7fc4');
+      gb.box(30, 4, 8, cx + 4, 0, WATER_Z + 28 + (i % 2) * 18, '#30343c'); gb.box(8, 4, 6, cx - 6, 4, WATER_Z + 28 + (i % 2) * 18, '#e8e8e8');
+      for (let k = 0; k < 6; k++) gb.box(4, 2, 2.4, cx + k * 4.2 - 6, 4, WATER_Z + 28 + (i % 2) * 18, pickR(R, ['#c0392b', '#27ae60', '#e67e22', '#2f7fd6']));
+    }
+    for (let i = 0; i < L.power; i++) { gb.cyl(6, 8, 24, 205, 0, -90 + i * 22, '#c9c6bd', 16); gb.box(4, 30, 4, 220, 0, -90 + i * 22, '#9c9488'); }
+    for (let i = 0; i < L.housing * 4; i++) { const x = -195 + (i % 4) * 14, z = 30 + Math.floor(i / 4) * -26; gb.box(10, 18 + R() * 30, 10, x, 0, z, pickR(R, ['#d8cfc0', '#c9b8a3', '#e2dcd0', '#b7a99a']), true); }
+    for (let i = 0; i < L.malls; i++) gb.box(30, 10, 20, 190, 0, 60 - i * 28, pickR(R, ['#e0a42a', '#d64a3a', '#7a5ac8']), true);
+    for (let i = 0; i < L.hotels; i++) gb.box(9, 40 + i * 8, 9, 120 + i * 14, 0, 82, '#6fa8dc', true);
+    for (let i = 0; i < L.industrial; i++) { gb.box(24, 9, 16, 205, 0, -10 + i * 0 - i * 0, '#9d988f'); gb.box(24, 9, 16, 235, 0, -10 - i * 20, '#8a7f73'); gb.cyl(1.4, 1.8, 22, 245, 0, -4 - i * 20, '#6b625a'); }
+    if (L.tourism) { // колесо огляду й атракціони
+      const wx = 60, wz = WATER_Z - 8, r = 9 + L.tourism;
+      gb.box(1, r + 2, 1, wx - 3, 0, wz, '#cccccc'); gb.box(1, r + 2, 1, wx + 3, 0, wz, '#cccccc');
+      for (let a = 0; a < 16; a++) { const t = a / 16 * Math.PI * 2; gb.box(1.6, 1.6, 1.6, wx + Math.cos(t) * r, r + 2 + Math.sin(t) * r, wz, a % 2 ? '#e07aa8' : '#ffd23f'); }
+      if (L.tourism >= 3) gb.cyl(14, 16, 8, -60, 0, -175, '#e6e2d6', 24);
+    }
+    infraMesh = gb.mesh(true); scene.add(infraMesh);
   }
 
   // ---------- керування ----------
@@ -517,6 +573,7 @@ const City3D = (() => {
       if (PICK_GEO) { PICK_GEO.dispose(); PICK_GEO = null; }
       if (renderer) { renderer.domElement.removeEventListener('webglcontextlost', onLost); renderer.domElement.remove(); renderer.dispose(); }
     } catch (e) { console.error(e); }
+    infraMesh = null; infraSig = '';
     disposables.length = 0; sprites = []; pickables = []; pedData = []; carData = [];
     renderer = null; scene = null; built = false; boatsMesh = null;
   }

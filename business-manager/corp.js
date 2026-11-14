@@ -105,6 +105,7 @@ function divDemand(d) {
   if (d.ind === 'airline') D *= (C.tourism || 1) * (0.7 + 0.1 * Math.min(6, Object.keys(state.unlocked || {}).length));
   if (d.ind === 'construction') D *= e.housing * (e.phase === 'boom' ? 1.3 : e.phase === 'crisis' ? 0.6 : 1) * (1 + 0.1 * corpState().builds.length);
   if (d.ind === 'telecom') D *= 1 + 0.02 * state.tech.it;
+  if (typeof cityMult === 'function') { if (d.ind === 'hotel') D *= cityMult(d.city, 'hotel') * cityMult(d.city, 'tourism'); if (d.ind === 'airline') D *= cityMult(d.city, 'airline') * cityMult(d.city, 'tourism'); if (d.ind === 'telecom' || d.ind === 'insurance') D *= Math.sqrt(cityMult(d.city, 'traffic')); }
   for (const z of corpState().disasters) if (z.city === d.city && (d.ind === 'hotel' || d.ind === 'airline')) D *= 0.6;
   return D;
 }
@@ -117,7 +118,7 @@ function divAttract(d) {
 function divDaily(d) {
   const I = INDUSTRIES[d.ind], C = corpState(), pa = divPriceAt(d.city), Q = QUALITY_PLANS[d.plan];
   // якість тяжіє до плану; супутники допомагають телекому
-  const qTarget = Q.target + (d.ind === 'telecom' ? Math.min(10, C.sats.length * 3) : 0) + state.tech.it * 0.5;
+  const qTarget = Q.target + (d.ind === 'telecom' ? Math.min(10, C.sats.length * 3) : 0) + state.tech.it * 0.5 + (typeof sciFx === 'function' ? sciFx('div') + (d.ind === 'telecom' ? sciFx('telecom') : 0) : 0);
   d.quality = clamp(d.quality + (qTarget - d.quality) * 0.03, 5, 100);
   const rivals = sectorRivals(I.sector);
   const cartel = state.war && state.war.cartels.find((k) => k.sector === I.sector && k.members.includes('player'));
@@ -195,7 +196,7 @@ function pharmaDaily() {
       const P = PHASES_RX[x.stage];
       book('divCost', -P.cost * priceLvl()); x.day++;
       if (x.day >= P.days) {
-        const p = clamp(P.p + state.tech.it * 0.01 + (C.pharma.scientists - 20) * 0.0015, 0.05, 0.95);
+        const p = clamp(P.p + (typeof sciFx === 'function' ? sciFx('drug') : 0) + state.tech.it * 0.01 + (C.pharma.scientists - 20) * 0.0015, 0.05, 0.95);
         if (chance(p)) { x.stage++; x.day = 0; if (x.stage === PHASES_RX.length) { x.approved = state.day; x.patentUntil = state.day + 720; news(`💊 Препарат ${x.name} (${state.company}) схвалено регулятором! Патентний захист до дня ${x.patentUntil}.`, 'business', 'good', true); if (typeof applyReputation === 'function') applyReputation('player', 1.5); } else log(`🧬 ${x.name}: успішно завершено «${P.name}».`, 'good'); }
         else { x.stage = 99; x.failed = state.day; log(`🧬 ${x.name}: проєкт провалив «${P.name}». Інвестиції втрачено.`, 'bad'); }
       }
@@ -220,6 +221,7 @@ function foundSpace() {
   checkAchievements();
 }
 const SAT_COST = 20e6, LAUNCH_COST = 8e6;
+const launchCost = () => LAUNCH_COST * priceLvl() * (1 - (typeof sciFx === 'function' ? sciFx('launch') : 0));
 function buildSatellite(kind) {
   const C = corpState(); if (!C.space) return;
   const c = SAT_COST * priceLvl(); if (state.cash < c) return toast(`Супутник коштує ${moneyK(c)}.`, 'bad');
@@ -228,7 +230,7 @@ function buildSatellite(kind) {
 }
 function launch(id) {
   const C = corpState(), b = C.builds.find((x) => x.id === id); if (!b || b.ready > state.day) return;
-  const c = LAUNCH_COST * priceLvl(); if (state.cash < c) return toast(`Запуск коштує ${moneyK(c)}.`, 'bad');
+  const c = launchCost(); if (state.cash < c) return toast(`Запуск коштує ${moneyK(c)}.`, 'bad');
   book('divCost', -c); C.builds = C.builds.filter((x) => x !== b); C.space.launches++;
   if (chance(C.space.rel)) {
     C.sats.push({ id: b.id, kind: b.kind, since: state.day, until: state.day + 1500 });

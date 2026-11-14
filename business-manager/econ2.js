@@ -42,7 +42,7 @@ function fxPriceFactor(cid) { const cur = CURRENCY_OF[cid] || 'USD'; return Math
 function importFactor(cid) {
   const cur = CURRENCY_OF[cid] || 'USD';
   const t = worldState().tariffs[REGION_OF[cid]] || 0;
-  return (fxOf(cid) / FX_BASE[cur]) * (1 + t);
+  return (fxOf(cid) / FX_BASE[cur]) * (1 + t) * (typeof cityMult === 'function' ? cityMult(cid, 'import') : 1);
 }
 function commodFactor(g) {
   const L = COMMOD_LINKS[g]; if (!L || !state.world) return 1;

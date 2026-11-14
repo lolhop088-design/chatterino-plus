@@ -18,6 +18,7 @@ const viewCity = () => (state.ui.mapCity && state.unlocked && state.unlocked[sta
 
 // ================= Нова гра =================
 function newGame(o = {}) {
+  if (CITIES.mycity) delete CITIES.mycity;
   const C = CITIES[o.city] || CITIES.kyiv;
   state = {
     v: 2, company: o.company || 'Моя компанія', city: o.city || 'kyiv',
@@ -185,6 +186,7 @@ function competitors(b) {
 }
 function trafficMult(districtId, type, C = city()) {
   let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  if (typeof cityMult === 'function' && typeof cityIdOf === 'function') { const cid = cityIdOf(C); m *= cityMult(cid, 'traffic'); if (districtId === 'center' || districtId === 'river') m *= cityMult(cid, 'tourism'); }
   if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
   if (wd >= 5) {
@@ -196,7 +198,7 @@ function trafficMult(districtId, type, C = city()) {
 }
 function retailCapacity(b) {
   const T = TYPES[b.type];
-  return sum(staffOf(b), (p) => T.cap * (0.5 + effSkill(p, 'sales') * 0.2)) * (1 + 0.2 * (b.upg.equipment - 1)) * (1 + 0.05 * state.tech.retail) * (b.manager ? 1.05 : 1) * absentPenalty(b);
+  return sum(staffOf(b), (p) => T.cap * (0.5 + effSkill(p, 'sales') * 0.2)) * (1 + 0.2 * (b.upg.equipment - 1)) * (1 + 0.05 * state.tech.retail + (typeof sciFx === 'function' ? sciFx('retail') : 0)) * (b.manager ? 1.05 : 1) * absentPenalty(b);
 }
 
 function simulateHour(b, h) {
@@ -351,7 +353,7 @@ function whTake(g, qty) {
 const mktPrice = (g) => GOODS[g].price * priceLvl() * state.market[g].mult * (state.world ? commodFactor(g) : 1);
 const sellPrice = (g) => mktPrice(g) * (0.93 + 0.025 * state.depts.sales);
 const buyPrice = (g) => mktPrice(g) * 1.05;
-const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount();
+const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount() * (typeof cityMult === 'function' ? cityMult(state.city, 'transport') : 1);
 function marketSell(g, qty, silent) {
   qty = Math.floor(Math.min(qty, whQty(g)));
   if (qty <= 0) return 0;
@@ -442,7 +444,7 @@ function facStaffFactor(f) {
 function facRateFull(f, r) {
   if (!r) return 0;
   const rate = f.kind === 'carplant' ? 5 : r.rate;
-  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry) * (f.manager ? 1.05 : 1) * absentPenalty(f);
+  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry + (typeof sciFx === 'function' ? sciFx('factory') : 0) + (f.kind === 'chipfab' ? (typeof sciFx === 'function' ? sciFx('chipfab') : 0) : 0) + (f.kind === 'powerplant' ? (typeof sciFx === 'function' ? sciFx('power') : 0) : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'industry') : 1);
 }
 function facValue(f) { return Math.round(f.bookVal * 0.7); }
 function sellFac(f) {
@@ -497,10 +499,10 @@ function facDaily(f, phase) {
   y.inCost = cost;
   // енергія
   if (!isPower) {
-    const need = F.power * f.level * (1 - 0.05 * state.tech.industry) * (0.3 + 0.7 * (full ? n / full : 0));
+    const need = F.power * f.level * (1 - 0.05 * state.tech.industry - (typeof sciFx === 'function' ? sciFx('energyUse') : 0)) * (0.3 + 0.7 * (full ? n / full : 0));
     const own = Math.min(powerPool, need);
     powerPool -= own;
-    const buy = (need - own) * state.econ.power * priceLvl();
+    const buy = (need - own) * state.econ.power * priceLvl() * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'power') : 1);
     if (buy) book('utilities', -buy);
     y.power = buy; cost += buy;
   }
@@ -520,7 +522,7 @@ function facDaily(f, phase) {
 // ================= IT =================
 function officeDaily(f, y) {
   const devs = staffOf(f);
-  const pts = sum(devs, (p) => effSkill(p, 'dev')) * (1 + 0.05 * state.tech.it) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (f.strike ? 0 : 1);
+  const pts = sum(devs, (p) => effSkill(p, 'dev')) * (1 + 0.05 * state.tech.it + (typeof sciFx === 'function' ? sciFx('it') : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (f.strike ? 0 : 1);
   const proj = state.projects.find((p) => p.office === f.id && p.status === 'dev');
   y.devPts = pts;
   if (proj) {
@@ -574,7 +576,7 @@ function carStats(spec) {
   const weight = Math.round(1300 * S.size * M.weight + ({ ev: 350, v8: 220, v6: 140 }[spec.engine] || 80));
   const perf = (En.hp / weight) * 1000;
   const fit = S.engines.includes(spec.engine) ? 8 : -12;
-  const quality = Math.round(clamp(28 + trim * 9 + En.q + M.q + fit + state.tech.auto * 5 + (perf - 110) * 0.04, 5, 100));
+  const quality = Math.round(clamp(28 + trim * 9 + En.q + M.q + fit + state.tech.auto * 5 + (spec.engine === 'ev' ? (typeof sciFx === 'function' ? sciFx('ev') : 0) : 0) + (perf - 110) * 0.04, 5, 100));
   const steel = Math.round(800 * S.size * M.steel), plastic = Math.round(300 * S.size * M.plastic), chips = Math.round(60 + En.chips + trim * 20);
   const comp = En.cost + M.extra + [0, 1200, 3200][trim - 1];
   const fairBase = Math.round(S.base * (0.55 + quality / 100 * 0.9));
@@ -994,6 +996,7 @@ function unlockCity(cid) {
 }
 /** Сумісність зі старими збереженнями (одне місто). */
 function migrateState() {
+  if (state.cities && state.cities.custom && typeof restoreCustomCity === 'function') restoreCustomCity(state.cities.custom);
   if (!state.difficulty) state.difficulty = 'normal';
   if (typeof worldState === 'function') worldState();
   if (typeof govState === 'function') govState();
@@ -1006,6 +1009,8 @@ function migrateState() {
   if (typeof polState === 'function') polState();
   if (typeof corpState === 'function') corpState();
   if (typeof warState === 'function') warState();
+  if (typeof sciState === 'function') sciState();
+  if (typeof cityState === 'function') cityState();
 }
 
 // ================= Поглинання компаній =================
@@ -1149,7 +1154,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) - debt(); }
+function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) + (typeof infraValue === 'function' ? infraValue() : 0) - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }
@@ -1317,7 +1322,7 @@ function endOfDay() {
   propsDaily();
   personalDaily();
   book('depts', -sum(Object.values(state.depts), deptDaily));
-  state.tech.points += state.depts.rnd * 12;
+  state.tech.points += state.depts.rnd * 12 * (1 + (typeof sciFx === 'function' ? sciFx('research') : 0));
   staffDaily();
   bankDaily();
   if (typeof worldDaily === 'function') worldDaily();
@@ -1395,6 +1400,10 @@ const ACHIEVEMENTS = [
   { id: 'conglomerate', icon: '🏢', name: 'Конгломерат', desc: 'Підрозділи в 3 різних галузях', check: (s) => !!(s.corp && new Set(s.corp.divs.map((d) => d.ind)).size >= 3) },
   { id: 'pharma', icon: '💊', name: 'Блокбастер', desc: 'Отримайте схвалення власного препарату', check: (s) => !!(s.corp && s.corp.drugs.some((x) => x.approved)) },
   { id: 'orbit', icon: '🛰️', name: 'Орбіта', desc: 'Виведіть власний супутник на орбіту', check: (s) => !!(s.corp && s.corp.sats.length) },
+  { id: 'scientist', icon: '⚛️', name: 'Технологічний лідер', desc: 'Відкрийте 6 великих технологій', check: (s) => !!(s.sci && Object.keys(s.sci.done).length >= 6) },
+  { id: 'phone', icon: '📱', name: 'Власний смартфон', desc: 'Випустіть власний смартфон', check: (s) => !!(s.sci && s.sci.phones.length) },
+  { id: 'builder2', icon: '🌉', name: 'Будівничий міст', desc: 'Профінансуйте 5 об’єктів інфраструктури', check: (s) => !!(s.cities && Object.values(s.cities.c).reduce((a, d) => a + Object.values(d.owner).reduce((x, y) => x + y, 0), 0) >= 5) },
+  { id: 'founder', icon: '🏙️', name: 'Засновник міста', desc: 'Заснуйте власне місто', check: (s) => !!(s.cities && s.cities.custom) },
   { id: 'banker', icon: '🏦', name: 'Банкір', desc: 'Отримайте банківську ліцензію', check: (s) => !!s.bank },
   { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
   { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },
