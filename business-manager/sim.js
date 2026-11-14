@@ -53,6 +53,7 @@ function addCompany(name, ticker, sector) {
   const price = rnd(18, 260);
   const co = { id: ticker, name, ticker, sector, scale, cash: S.rev * scale * rnd(20, 60), shares: Math.round(mcap / price), price, ema: daily, hist: [price], alive: true, rep: rnd(0.8, 1.2), eff: rnd(0.85, 1.15), born: state.day };
   state.companies.push(co);
+  if (typeof aiInit === 'function') aiInit(co);
   return co;
 }
 const coById = (id) => state.companies.find((c) => c.id === id);
@@ -177,7 +178,7 @@ function competitors(b) {
   let s = 0;
   for (const l of state.lots) {
     if (l.district !== lot.district || l === lot || lotCityId(l) !== lotCityId(lot)) continue;
-    if (l.npc && l.npc.type === b.type) { const co = coById(l.npc.co); if (!isSub(co)) s += co ? co.rep : 1; }
+    if (l.npc && l.npc.type === b.type) { const co = coById(l.npc.co); if (!isSub(co)) s += typeof coStrength === 'function' ? coStrength(co) : co ? co.rep : 1; }
     if (l.ownerKind === 'biz') { const o = bizById(l.owner); if (o && o.type === b.type) s += 1; }
   }
   return s * modMult('pricewar', b.type);
@@ -855,8 +856,8 @@ function aiDaily() {
     const S = SECTORS[co.sector];
     const shops = state.lots.filter((l) => l.npc && l.npc.co === co.id).length;
     co.influence = isSub(co) ? 1 : playerInfluence(co);
-    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl() * co.influence;
-    let profit = rev * S.margin * co.eff - S.rev * co.scale * 0.02 * (e.phase === 'crisis' ? 1.5 : 1);
+    const rev = S.rev * co.scale * e.demand * (1 + 0.06 * shops) * rnd(0.85, 1.15) * priceLvl() * co.influence * (co.volMult || 1);
+    let profit = rev * S.margin * co.eff * (co.marginMult || 1) - S.rev * co.scale * 0.02 * (e.phase === 'crisis' ? 1.5 : 1);
     if (chance(0.01)) profit -= rev * rnd(0.5, 3); // разові збитки
     co.cash += profit;
     if (isSub(co)) {
@@ -995,6 +996,7 @@ function migrateState() {
   if (!state.difficulty) state.difficulty = 'normal';
   if (typeof worldState === 'function') worldState();
   if (typeof govState === 'function') govState();
+  if (typeof aiInit === 'function') for (const co of state.companies) aiInit(co);
   if (!state.unlocked) state.unlocked = { [state.city]: true };
   for (const l of state.lots) if (!l.city) l.city = state.city;
   if (!state.contracts) state.contracts = {};
@@ -1061,7 +1063,7 @@ function contractsDaily() {
   state.contracts = state.contracts || {};
   let total = 0;
   for (const co of aliveCos()) {
-    if (isSub(co)) continue;
+    if (isSub(co) || (co.rivalry || 0) > 0.7) continue; // ворожі компанії не купують у вас
     const goods = (CONTRACT_DEMAND[co.sector] || []).filter((g) => whQty(g) > 0);
     if (!goods.length) continue;
     const budget = SECTORS[co.sector].rev * co.scale * 0.04 * priceLvl() * state.econ.demand / goods.length;

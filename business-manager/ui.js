@@ -41,7 +41,7 @@ function avatarSVG(look, size = 40) {
 const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
-  ['hq', '🏛️', 'Штаб'], ['world', '🌐', 'Світова економіка'], ['gov', '🏛️', 'Уряд'], ['antitrust', '⚖️', 'Антимонопольний комітет'], ['regions', '🌍', 'Регіони'], ['ventures', '🚀', 'Стартапи'], ['sponsor', '🏆', 'Спорт'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
+  ['hq', '🏛️', 'Штаб'], ['rivals', '⚔️', 'Конкуренти'], ['world', '🌐', 'Світова економіка'], ['gov', '🏛️', 'Уряд'], ['antitrust', '⚖️', 'Антимонопольний комітет'], ['regions', '🌍', 'Регіони'], ['ventures', '🚀', 'Стартапи'], ['sponsor', '🏆', 'Спорт'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
   ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
@@ -365,6 +365,7 @@ const VIEWS = {
       html += `<div class="card"><p class="muted">Ролі: ${Object.values(ROLES).join(', ')}. Працівник не за профілем працює на 55%. Кандидати оновлюються щодня; зарплати ростуть з інфляцією та низьким безробіттям.</p>`;
       if (!units.length) html += '<p>Спочатку відкрийте бізнес або підприємство.</p>';
       html += `<div class="table-wrap"><table><thead><tr><th>Кандидат</th><th>Роль</th><th>Навичка</th><th>Ставка</th><th>Найняти в</th></tr></thead><tbody>${state.candidates.map((c) => `<tr><td>${esc(c.name)}</td><td>${ROLES[c.role]}</td><td>${skillDots(c.skill)}</td><td>${money(c.wage, 1)}/год</td><td>${units.length ? `<div class="row nowrap"><select id="hire-${c.id}">${unitOptions(state.ui.bizId || state.ui.facId)}</select><button class="btn primary sm" data-act="hire" data-id="${c.id}">Найняти</button></div>` : '—'}</td></tr>`).join('')}</tbody></table></div></div>`;
+      if (units.length) html += `<div class="card"><h3>🧲 Переманити з конкурентів</h3><p class="muted">Найсильніші фахівці технологічних лідерів. Ставка +40% до ринку і разовий бонус за перехід; конкурент слабшає й стає ворожішим.</p><div class="table-wrap"><table><thead><tr><th>Звідки</th><th>Роль</th><th>Навичка</th><th>Ставка</th><th>Куди</th></tr></thead><tbody>${poachCandidates().map((c) => `<tr><td>${esc(c.co.name)}<br><small>${STRATS[c.co.strat].icon} технології ${c.co.tech}</small></td><td>${ROLES[c.role]}</td><td>${skillDots(c.skill)}</td><td>${money(c.wage, 1)}/год<br><small class="muted">бонус ${moneyK(c.wage * 160)}</small></td><td><div class="row nowrap"><select id="poach-${c.co.id}">${unitOptions(state.ui.bizId || state.ui.facId)}</select><button class="btn sm primary" data-act="poach" data-id="${c.co.id}">Переманити</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
     } else if (tab === 'team') {
       if (!state.staff.length) html += '<div class="card"><p class="muted">Поки нікого не найнято.</p></div>';
       else html += `<div class="card"><div class="table-wrap"><table><thead><tr><th>Працівник</th><th>Навичка</th><th>Мораль</th><th>Ставка</th><th>Місце</th><th></th></tr></thead><tbody>${state.staff.map((p) => `<tr><td>${esc(p.name)}<br><small>${ROLES[p.role]}</small></td><td>${skillDots(p.skill)}</td><td>${bar(p.morale)}<small>${p.morale.toFixed(0)}</small></td><td>${money(p.wage, 1)}<br><small class="${p.wage < marketWage(p) ? 'neg' : 'muted'}">ринок ${money(marketWage(p), 1)}</small></td><td><select data-change="transfer" data-id="${p.id}">${unitOptions(p.unit)}</select></td><td><div class="row nowrap"><button class="btn sm" data-act="raise" data-id="${p.id}">+10%</button><button class="btn danger sm" data-act="fire" data-id="${p.id}">✕</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
@@ -418,7 +419,8 @@ const VIEWS = {
     } else {
       if (state.ipo) {
         const I = state.ipo, mcap = I.price * I.shares;
-        html += `<div class="kpis">${kpi('Ціна акції', money(I.price, 2))}${kpi('Капіталізація', moneyK(mcap))}${kpi('У вільному обігу', pct(I.float, 0))}${kpi('Ваша частка', moneyK(mcap * (1 - I.float)))}</div>${chartBox('chIpo', [{ data: I.hist, color: '#3f7fc4' }], I.hist.map((_, i) => String(i + 1)), 'Акції ' + esc(state.company), (v) => '$' + v.toFixed(1))}`;
+        const holders = Object.entries(I.holders || {}).filter(([, v]) => v > 0);
+        html += `<div class="kpis">${kpi('Ціна акції', money(I.price, 2))}${kpi('Капіталізація', moneyK(mcap))}${kpi('У вільному обігу', pct(I.float, 0))}${kpi('Ваша частка', moneyK(mcap * (1 - I.float)))}</div>${holders.length ? `<div class="card"><h3>Великі акціонери</h3>${holders.map(([id, v]) => `<p>🦈 ${esc((coById(id) || {}).name || id)} — ${pct(v, 1)}</p>`).join('')}<p class="muted">Ви зберігаєте контрольний пакет ${pct(1 - I.float, 0)}.</p></div>` : ''}${chartBox('chIpo', [{ data: I.hist, color: '#3f7fc4' }], I.hist.map((_, i) => String(i + 1)), 'Акції ' + esc(state.company), (v) => '$' + v.toFixed(1))}`;
       } else {
         const ok = canIPO();
         html += `<div class="card"><h3>Вихід на біржу (IPO)</h3><p>Вимоги: капітал від ${moneyK(750000 * priceLvl())}, щонайменше 4 об’єкти, 60 днів історії.</p>
@@ -501,6 +503,23 @@ const VIEWS = {
     }
     html += `</div><div class="card"><h3>Журнал штабу</h3><ul class="log">${H.log.slice(0, 40).map((l) => `<li><small>Д${l.day}</small> ${DIRECTIVES[l.key].icon} ${esc(l.text)}</li>`).join('') || '<li class="muted">Поки порожньо.</li>'}</ul></div>`;
     return html;
+  },
+
+  rivals() {
+    const cos = aliveCos().filter((c) => !isSub(c)).map((c) => aiInit(c));
+    const sort = state.ui.rivalSort || 'rivalry';
+    const sorted = [...cos].sort((a, b) => sort === 'rivalry' ? (b.rivalry || 0) - (a.rivalry || 0) : sort === 'tech' ? b.tech - a.tech : sort === 'debt' ? b.debt - a.debt : coMcap(b) - coMcap(a));
+    const hostile = cos.filter((c) => c.rivalry > 0.5).length;
+    let html = `<h1>⚔️ Конкуренти</h1><div class="kpis">${kpi('Компаній', cos.length)}${kpi('Ворожих до вас', hostile, hostile ? 'neg' : '')}${kpi('Цінові війни', state.mods.filter((m) => m.kind === 'pricewar').length)}${kpi('Заводів конкурентів', state.lots.filter((l) => l.npc && l.npc.fac).length)}</div>
+      <div class="card"><p class="muted">Кожна компанія має стратегію. Ворожнеча росте, коли ви тиснете на їхні ринки, демпінгуєте або забираєте виручку: тоді вони знижують ціни, оголошують цінові війни, переманюють ваших працівників, укладають ексклюзиви з постачальниками й перестають купувати у вас. Рейдери скуповують акції й поглинають слабших.</p></div>
+      <div class="chips filter">${[['rivalry', 'За ворожнечею'], ['cap', 'За капіталізацією'], ['tech', 'За технологіями'], ['debt', 'За боргом']].map(([k, l]) => `<button class="chip ${sort === k ? 'on' : ''}" data-act="rivalSort" data-v="${k}">${l}</button>`).join('')}</div><div class="card stocklist">`;
+    for (const c of sorted) {
+      const St = STRATS[c.strat];
+      const shops = state.lots.filter((l) => l.npc && l.npc.co === c.id);
+      const r = c.rivalry || 0;
+      html += `<div class="stock"><div><b>${St.icon} ${esc(c.name)}</b> <small class="muted">${SECTORS[c.sector].name}</small><br><small>${St.name} · ціни ×${c.priceIdx.toFixed(2)} · технології ${c.tech} · борг ${moneyK(c.debt)} · точок ${shops.filter((l) => l.npc.type).length}, заводів ${shops.filter((l) => l.npc.fac).length}${Object.keys(c.stakes || {}).length ? ` · частки в ${Object.keys(c.stakes).length} компаніях` : ''}</small>${c.actions && c.actions[0] ? `<br><small class="muted">${esc(c.actions[0])}</small>` : ''}</div><div class="px"><b class="${r > 0.5 ? 'neg' : r > 0.25 ? '' : 'pos'}">${Math.round(r * 100)}%</b><br><small class="muted">ворожнеча</small></div>${spark(c.hist.slice(-30))}</div>`;
+    }
+    return html + '</div>';
   },
 
   world() {
@@ -988,6 +1007,8 @@ const ACT = {
   bankLend: (d) => bankLendToCorp(+d.v),
   bankRepay: () => bankRepayCorp(state.bank.internal),
   bankRefi: () => bankRefinance(),
+  rivalSort: (d) => { state.ui.rivalSort = d.v; },
+  poach: (d) => { const s = document.getElementById('poach-' + d.id); poach(d.id, s && s.value); },
   lawFirm: (d) => { govState().lawFirm = +d.v; },
   appeal: (d) => confirmBox(`Подати апеляцію за ${money(appealCost())}? Суд вирішить за 20 днів.`, () => fileAppeal(d.id)),
   acceptCase: (d) => { const c = govState().cases.find((x) => x.id === d.id); if (c) c.stage = 'closed'; },
