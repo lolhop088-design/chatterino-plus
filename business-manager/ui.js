@@ -73,7 +73,7 @@ function render(force = true) {
   const now = Date.now();
   if (!force && now - lastMainRender < (isMobile() ? 700 : 350)) return;
   if (!force && state.ui.view === 'map' && use3D()) return;
-  if (!force && ['settings', 'achievements', 'cars', 'life', 'admin'].includes(state.ui.view)) return;
+  if (!force && ['settings', 'achievements', 'cars', 'life', 'admin', 'globe'].includes(state.ui.view)) return;
   lastMainRender = now;
   renderNav();
   const v = VIEWS[state.ui.view] || VIEWS.dashboard;
@@ -1107,7 +1107,7 @@ if (typeof window !== 'undefined') window.androidBack = function () {
   if (state.ui.view === 'map' && state.ui.lot) { state.ui.lot = null; render(true); return true; }
   if (state.ui.view === 'biz') { state.ui.view = 'businesses'; render(true); return true; }
   if (state.ui.view === 'fac') { state.ui.view = 'industry'; render(true); return true; }
-  if (state.ui.view !== 'dashboard') { state.ui.view = 'dashboard'; render(true); return true; }
+  if (state.ui.view !== 'empire') { state.ui.view = 'empire'; render(true); return true; }
   save();
   return false;
 };

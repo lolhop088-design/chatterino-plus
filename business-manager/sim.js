@@ -31,7 +31,7 @@ function newGame(o = {}) {
     depts: { hr: 0, accounting: 0, legal: 0, rnd: 0, marketing: 0, sales: 0 },
     tech: { points: 0, retail: 0, industry: 0, auto: 0, it: 0 },
     led: {}, ledger: [], invPrev: 0, history: [], log: [], news: [], achievements: {}, flags: {}, over: false, negDays: 0,
-    ui: { view: 'dashboard', bizId: null, facId: null, tab: 'overview', lot: null },
+    ui: { view: 'empire', bizId: null, facId: null, tab: 'overview', lot: null },
   };
   for (const g of Object.keys(GOODS)) state.market[g] = { mult: rnd(0.9, 1.1) };
   genCompanies();
