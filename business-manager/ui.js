@@ -875,8 +875,18 @@ function boot() {
     if (e.key === 'Enter' && e.target.id === 'bizName') document.querySelector('[data-act="renameOk"]').click();
     if (e.key === ' ' && e.target === document.body && state) { e.preventDefault(); setSpeed(state.speed ? 0 : 1); }
   });
-  let rt = 0;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (state && state.ui.view !== 'map') render(true); }, 200); });
+  // Екранна клавіатура змінює лише висоту вікна — не перемальовуємо, інакше поле вводу зникає разом із клавіатурою.
+  let rt = 0, lastW = window.innerWidth;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      const ae = document.activeElement;
+      const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA');
+      if (Math.abs(window.innerWidth - lastW) < 2 || typing) return;
+      lastW = window.innerWidth;
+      if (state && state.ui.view !== 'map') render(true);
+    }, 200);
+  });
   document.addEventListener('visibilitychange', () => { if (document.hidden && state) save(); });
   if (loadSave() && state && !state.over) {
     render(true); setSpeed(0);
