@@ -10,8 +10,21 @@ android {
         applicationId 'com.bizimperia.game'
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        // Номер збірки CI → versionCode, щоб нові APK ставились поверх старих.
+        def run = (System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int
+        versionCode run
+        versionName "1.${run}"
+    }
+
+    // Постійний ключ підпису: без нього кожна CI-збірка мала б новий випадковий
+    // debug-ключ, і Android відмовлявся б оновлювати застосунок.
+    signingConfigs {
+        shared {
+            storeFile file('bizimperia.keystore')
+            storePassword 'bizimperia'
+            keyAlias 'bizimperia'
+            keyPassword 'bizimperia'
+        }
     }
 
     // Гра (HTML/JS/CSS) береться прямо з теки business-manager у корені репозиторію.
@@ -22,8 +35,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
         release {
             minifyEnabled false
+            signingConfig signingConfigs.shared
         }
     }
 

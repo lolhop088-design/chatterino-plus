@@ -481,6 +481,8 @@ const VIEWS = {
     const q = (typeof City3D !== 'undefined' && City3D.quality()) || 'low';
     return `<h1>Гра</h1><div class="card"><h3>Графіка 3D-міста</h3><div class="chips filter">${[['low', 'Низька (економія батареї)'], ['high', 'Висока (тіні, згладжування)']].map(([k, n]) => `<button class="chip ${q === k ? 'on' : ''}" data-act="quality" data-v="${k}">${n}</button>`).join('')}<button class="chip ${state.ui.no3d ? 'on' : ''}" data-act="toggle3d">${state.ui.no3d ? '2D-мапа (увімкнути 3D)' : 'Вимкнути 3D'}</button></div></div>
       <div class="card"><h3>Збереження</h3><p class="muted">Автозбереження щоночі та при згортанні застосунку.</p><div class="row wrap"><button class="btn primary" data-act="saveNow">💾 Зберегти</button><button class="btn danger" data-act="newGameConfirm">🔄 Нова гра</button></div></div>
+      <div class="card"><h3>Перенесення збереження</h3><p class="muted">Скопіюйте код, щоб не втратити прогрес під час перевстановлення або щоб перенести гру на інший телефон.</p>
+        <div class="row wrap"><button class="btn" data-act="exportSave">📤 Експорт</button><button class="btn" data-act="importSave">📥 Імпорт</button></div></div>
       <div class="card"><h3>Як грати</h3><ul class="help">
       <li><b>Старт:</b> ${money(4000)} — цього мало для бізнесу. Працюйте, беріть кредит, починайте з малого.</li>
       <li><b>Економіка</b> циклічна: бум → рецесія → криза. Інфляція підвищує ціни, зарплати й оренду — переглядайте свої ціни.</li>
@@ -737,6 +739,25 @@ const ACT = {
   rename: (d) => { const u = unitById(d.id); showModal(`<h2>Перейменувати</h2><label>Назва <input id="bizName" maxlength="40" value="${esc(u.name)}"></label><div class="row end"><button class="btn" data-act="modalClose">Скасувати</button><button class="btn primary" data-act="renameOk" data-id="${u.id}">Зберегти</button></div>`); },
   renameOk: (d) => { const v = document.getElementById('bizName').value.trim(); if (v) unitById(d.id).name = v; hideModal(); },
   saveNow: () => { save(); toast('Гру збережено.', 'good'); },
+  exportSave: () => {
+    const code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+    showModal(`<h2>Код збереження</h2><p class="muted">Скопіюйте весь текст і збережіть у нотатках.</p><textarea id="saveCode" readonly rows="8" class="code">${code}</textarea><div class="row end"><button class="btn" data-act="modalClose">Закрити</button><button class="btn primary" data-act="copySave">Копіювати</button></div>`);
+  },
+  copySave: () => {
+    const t = document.getElementById('saveCode'); t.select();
+    const done = () => toast('Код скопійовано.', 'good');
+    if (navigator.clipboard) navigator.clipboard.writeText(t.value).then(done, () => { document.execCommand('copy'); done(); });
+    else { document.execCommand('copy'); done(); }
+    return 'norender';
+  },
+  importSave: () => showModal(`<h2>Імпорт збереження</h2><p class="muted">Вставте код. Поточна гра буде замінена.</p><textarea id="saveIn" rows="8" class="code"></textarea><div class="row end"><button class="btn" data-act="modalClose">Скасувати</button><button class="btn primary" data-act="importOk">Завантажити</button></div>`),
+  importOk: () => {
+    try {
+      const s = JSON.parse(decodeURIComponent(escape(atob(document.getElementById('saveIn').value.trim()))));
+      if (!s || s.v !== 2 || !s.econ) throw new Error('несумісний код');
+      state = s; save(); hideModal(); setSpeed(0); toast('Збереження завантажено.', 'good');
+    } catch (e) { toast('Не вдалося прочитати код: ' + e.message, 'bad'); return 'norender'; }
+  },
   newGameConfirm: () => confirmBox('Почати нову гру? Прогрес буде втрачено.', () => setTimeout(() => startPrompt(true), 0)),
   newGamePrompt: () => startPrompt(false),
   startGame: () => {
