@@ -81,7 +81,7 @@ function bankRefinance() {
   log(`🏦 Зовнішні кредити (${money(need)}) рефінансовано у «${bankName()}».`, 'good');
 }
 
-function bankDaily() {
+function ownBankDaily() {
   const B = state.bank; if (!B || !B.open) return;
   const e = state.econ, K = e.rate / 100, P = priceLvl();
   const branches = bankBranches();
@@ -122,4 +122,4 @@ function bankDaily() {
     state.bank = null;
   }
 }
-HOOKS.day.push(bankDaily);
+HOOKS.day.push(ownBankDaily);

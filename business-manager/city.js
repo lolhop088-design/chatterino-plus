@@ -57,7 +57,7 @@ function projectCost(cid, k, by = 'player') {
   }
   return Math.round(c);
 }
-function startProject(cid, k) {
+function startInfra(cid, k) {
   const S = cityState(), D = cdev(cid);
   if (!canBuild(cid, k)) return toast('Місто не має виходу до моря.', 'bad');
   if (D.lv[k] >= 5) return toast('Максимальний рівень.', 'bad');

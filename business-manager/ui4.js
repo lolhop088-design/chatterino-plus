@@ -73,7 +73,7 @@ Object.assign(ACT, {
   phMkt: (d) => { const p = sciState().phones.find((x) => x.id === d.id); if (p) p.mkt = +d.v; },
   phStop: (d) => confirmBox('Зняти модель з виробництва?', () => { const S = sciState(); S.phones = S.phones.filter((x) => x.id !== d.id); }),
   devCity: (d) => { state.ui.devCity = d.v; },
-  devBuild: (d) => confirmBox(`Інвестувати ${money(projectCost(d.c, d.k))} у «${INFRA[d.k].name}» (${CITIES[d.c].name})?`, () => startProject(d.c, d.k)),
+  devBuild: (d) => confirmBox(`Інвестувати ${money(projectCost(d.c, d.k))} у «${INFRA[d.k].name}» (${CITIES[d.c].name})?`, () => startInfra(d.c, d.k)),
   devFound: () => confirmBox(`Заснувати власне місто за ${money(MY_CITY_COST * priceLvl())}?`, () => foundCity(askVal('myCityName').trim())),
 });
 
