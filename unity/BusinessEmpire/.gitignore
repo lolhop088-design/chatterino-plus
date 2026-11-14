@@ -1,0 +1,21 @@
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+*.csproj
+*.sln
+*.pidb
+*.userprefs
+.vs/
+# Генерується скриптом збірки
+/Assets/Scenes/
+/Assets/Scenes.meta
+/Assets/Settings/
+/Assets/Settings.meta
+/Assets/Resources/Materials/
+/Assets/Resources/Materials.meta

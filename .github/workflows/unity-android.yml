@@ -1,0 +1,100 @@
+name: Unity — Business Empire Ultimate
+
+on:
+  push:
+    paths:
+      - 'unity/**'
+      - '.github/workflows/unity-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UNITY_VERSION: 2022.3.76f1
+  PROJECT_PATH: unity/BusinessEmpire
+
+jobs:
+  # Ядро гри (чистий C#) + перевірка компіляції Unity-шару. Ліцензія Unity не потрібна.
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Тести симуляції (NUnit)
+        run: dotnet test unity/dotnet/Tests/BusinessEmpire.Tests.csproj --logger "console;verbosity=normal"
+      - name: Компіляція Unity-шару (reference-збірки UnityEngine)
+        run: |
+          ./unity/dotnet/fetch-unity-refs.sh
+          dotnet build unity/dotnet/UnityCheck/UnityCheck.csproj
+
+  # Збірка APK у Unity. Потрібні секрети UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD.
+  android:
+    needs: core
+    runs-on: ubuntu-latest
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - name: Перевірка ліцензії Unity
+        if: env.UNITY_LICENSE == ''
+        run: echo "::warning::Секрет UNITY_LICENSE не задано — збірку APK у Unity пропущено. Див. unity/README.md."
+
+      - uses: actions/checkout@v4
+        if: env.UNITY_LICENSE != ''
+
+      - name: Звільнити місце на диску
+        if: env.UNITY_LICENSE != ''
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: false
+          large-packages: false
+
+      - uses: actions/cache@v4
+        if: env.UNITY_LICENSE != ''
+        with:
+          path: ${{ env.PROJECT_PATH }}/Library
+          key: Library-Android-${{ hashFiles('unity/BusinessEmpire/Packages/manifest.json') }}
+          restore-keys: Library-Android-
+
+      - name: Тести в Unity (EditMode)
+        if: env.UNITY_LICENSE != ''
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Збірка APK
+        if: env.UNITY_LICENSE != ''
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: ${{ env.PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: Android
+          buildName: BusinessEmpireUltimate
+          buildMethod: BusinessEmpire.EditorTools.BuildScript.BuildAndroid
+          androidExportType: androidPackage
+          androidVersionCode: ${{ github.run_number }}
+
+      - uses: actions/upload-artifact@v4
+        if: env.UNITY_LICENSE != ''
+        with:
+          name: BusinessEmpireUltimate-apk
+          path: build/Android/*.apk
+
+      - name: Публікація релізу
+        if: env.UNITY_LICENSE != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unity-build-${{ github.run_number }}
+          name: Business Empire Ultimate (Unity) — збірка ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          files: build/Android/*.apk
+          body: |
+            Unity-версія гри (етап 1). Встановіть `BusinessEmpireUltimate.apk` на Android 8.0+ (ARM64).

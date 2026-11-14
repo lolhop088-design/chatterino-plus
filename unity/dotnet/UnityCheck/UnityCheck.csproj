@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Лише перевірка компіляції Unity-шару проти reference-збірок UnityEngine (NuGet: UnityEngine.Modules,
+       Unity3D.UnityEngine.UI). Шлях до збірок передається через UNITY_REFS. У Unity ці файли компілює сам рушій. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0618</NoWarn>
+    <UnityRefs Condition="'$(UNITY_REFS)' != ''">$(UNITY_REFS)</UnityRefs>
+    <UnityRefs Condition="'$(UNITY_REFS)' == ''">$(MSBuildThisFileDirectory)../.unityrefs</UnityRefs>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../BusinessEmpire/Assets/Scripts/Game/**/*.cs" />
+    <ProjectReference Include="../Core/BusinessEmpire.Core.csproj" />
+    <Reference Include="$(UnityRefs)/mod/lib/netstandard2.0/*.dll" />
+    <Reference Include="$(UnityRefs)/ui/lib/UnityEngine.UI.dll" />
+  </ItemGroup>
+</Project>

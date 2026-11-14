@@ -1,0 +1,4 @@
+<!-- Не дозволяти IL2CPP обрізати типи ядра: Newtonsoft створює їх через рефлексію при завантаженні збережень. -->
+<linker>
+  <assembly fullname="BusinessEmpire.Core" preserve="all" />
+</linker>
