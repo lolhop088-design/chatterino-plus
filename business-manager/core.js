@@ -215,6 +215,7 @@ const FACILITIES = {
   powerplant: { name: 'Електростанція', icon: '⚡', setup: 200000, staff: 6, power: 0, zones: ['industry'], sizes: ['L', 'XL'], role: 'engineer', shape: 'power',
     recipes: [{ id: 'power', out: 'power', rate: 150, in: { oil: 18 } }] },
   logistics: { name: 'Логістичний центр', icon: '🚚', setup: 80000, staff: 5, power: 1, zones: ['industry'], sizes: ['L', 'XL'], role: 'worker', shape: 'warehouse', recipes: [] },
+  bankbranch: { name: 'Відділення банку', icon: '🏦', setup: 120000, staff: 4, power: 0, zones: ['retail'], sizes: ['S', 'M', 'L'], role: 'sales', shape: 'office', recipes: [] },
   office: { name: 'IT-офіс / студія', icon: '💻', setup: 45000, staff: 0, power: 0, zones: ['retail'], sizes: ['M', 'L', 'XL'], role: 'dev', shape: 'office', recipes: [], maxStaffMult: 2 },
 };
 
@@ -355,6 +356,7 @@ const LEDGER = {
   salary: { name: 'Зарплата (особиста)', kind: 'inc' },
   dividends: { name: 'Дивіденди', kind: 'inc' },
   subsidiary: { name: 'Прибуток дочірніх компаній', kind: 'inc' },
+  bankProfit: { name: 'Прибуток власного банку', kind: 'inc' },
   interestInc: { name: 'Відсотки на рахунку', kind: 'inc' },
   purchases: { name: 'Закупівлі товарів і сировини', kind: 'exp' },
   wages: { name: 'Зарплати персоналу', kind: 'exp' },
@@ -375,6 +377,9 @@ const LEDGER = {
   loans: { name: 'Кредити (отримано/погашено)', kind: 'cash' },
   equity: { name: 'Залучений капітал (IPO)', kind: 'cash' },
   admin: { name: 'Адмін-коригування', kind: 'cash' },
+  bankCapital: { name: 'Капітал власного банку', kind: 'cash' },
+  ventureInv: { name: 'Інвестиції в стартапи', kind: 'cash' },
+  ventureExit: { name: 'Виходи зі стартапів', kind: 'cash' },
   assetSale: { name: 'Продаж активів', kind: 'cash' },
 };
 

@@ -183,7 +183,7 @@ function competitors(b) {
   return s * modMult('pricewar', b.type);
 }
 function trafficMult(districtId, type, C = city()) {
-  let m = modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
   if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
   if (wd >= 5) {
@@ -211,7 +211,7 @@ function simulateHour(b, h) {
   const ratio = sum(prods, (p) => p.share * (b.products[p.id].price / fairPrice(p, b)));
   let potential = D.traffic * trafficMult(D.id, b.type, cityOfLot(lot)) * T.draw * (T.aff[D.id] || 0.5) * CURVES[T.curve][h] * S.attract
     * (1 / (1 + 0.3 * competitors(b))) * mkt * (0.5 + b.rep / 100) * (1 + 0.12 * (b.upg.interior - 1));
-  potential *= clamp(1 - 0.5 * e * (ratio - 1), 0.2, 1.4) * rnd(0.85, 1.15);
+  potential *= clamp(1 - 0.5 * e * (ratio - 1), 0.2, 1.4) * rnd(0.85, 1.15) * (b.type === 'dealership' && typeof racingBoost === 'function' ? racingBoost() : 1);
   const arrivals = sround(potential);
   const served = Math.min(arrivals, sround(retailCapacity(b)));
   let rev = 0, cogs = 0, wanted = 0, sold = 0;
@@ -391,6 +391,7 @@ function openFacility(lotId, kind) {
   const lot = lotById(lotId), F = FACILITIES[kind];
   if (!lot || lot.npc || lot.owner) return;
   if (!F.sizes.includes(lot.size)) return toast('Розмір ділянки не підходить.', 'bad');
+  if (kind === 'bankbranch' && !(state.bank && state.bank.open)) return toast('Спершу отримайте банківську ліцензію.', 'bad');
   const setup = facSetupCost(kind, lot), cost = setup + lotRent(lot) * 7;
   if (state.cash < cost) return toast(`Потрібно ${money(cost)}.`, 'bad');
   book('capex', -cost);
@@ -471,7 +472,7 @@ function facDaily(f, phase) {
   else if (f.cond < 45 && chance((45 - f.cond) / 160)) { f.broken = ri(2, 4); log(`⚠️ ${f.name}: аварія обладнання! Простій ${f.broken} дн.`, 'bad'); }
   if (f.manager && (f.cond < 55 || f.broken)) repairFac(f, true);
   if (f.strike > 0) { f.strike--; y.short = 'страйк'; }
-  if (f.kind === 'logistics') { f.yest = y; return; }
+  if (f.kind === 'logistics' || f.kind === 'bankbranch') { f.yest = y; return; }
   const r = facRecipe(f);
   if (!r) { y.short = 'не обрано продукцію'; f.yest = y; return; }
   const staffF = facStaffFactor(f), condF = f.broken > 0 || f.strike > 0 ? 0 : 0.5 + 0.5 * f.cond / 100;
@@ -865,7 +866,9 @@ function aiDaily() {
     co.hist.push(+co.price.toFixed(2)); if (co.hist.length > 120) co.hist.shift();
     // розширення в місті
     if (TYPES[co.sector] && co.cash > 2e6 * co.scale && chance(0.025)) {
-      const free = state.lots.filter((l) => !l.npc && !l.owner && DMAP[l.district].zone === 'retail' && (!TYPES[co.sector].minSize || SIZE_ORDER.indexOf(l.size) >= SIZE_ORDER.indexOf(TYPES[co.sector].minSize)));
+      // Конкуренти не займають понад 60% торгових ділянок міста — гравцю має лишатися місце.
+      const crowded = (cid) => { const ls = state.lots.filter((x) => lotCityId(x) === cid && DMAP[x.district].zone === 'retail'); return ls.filter((x) => x.npc).length >= ls.length * 0.6; };
+      const free = state.lots.filter((l) => !l.npc && !l.owner && DMAP[l.district].zone === 'retail' && !crowded(lotCityId(l)) && (!TYPES[co.sector].minSize || SIZE_ORDER.indexOf(l.size) >= SIZE_ORDER.indexOf(TYPES[co.sector].minSize)));
       if (free.length) {
         const l = pick(free); l.npc = { co: co.id, type: co.sector }; co.cash -= 150000 * priceLvl();
         news(`🏬 «${co.name}» відкриває ${TYPES[co.sector].name.toLowerCase()} у районі «${DMAP[l.district].name}».`, 'corp');
@@ -957,6 +960,7 @@ function playerInfluenceParts(co) {
   if (co.sector === 'tech' && live) { f *= Math.max(0.6, 1 - 0.02 * live); parts.push(`${live} ваших IT-продуктів`); }
   const cm = state.carModels.filter((m) => m.active).length;
   if (co.sector === 'dealership' && cm) { f *= Math.max(0.6, 1 - 0.04 * cm); parts.push(`${cm} ваших моделей авто`); }
+  if (co.sector === 'bank' && state.bank && state.bank.deposits > 0) { const k = Math.min(0.5, state.bank.deposits / (2e9 * priceLvl())); f *= 1 - k; parts.push(`ваш банк забрав ${Math.round(k * 100)}% ринку`); }
   const c = state.contracts && state.contracts[co.id];
   if (c && c.day >= state.day - 1) { f *= 1.03; parts.push('купує у вас за контрактом (+)'); }
   return { factor: clamp(f, 0.3, 1.2), parts };
@@ -1114,7 +1118,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() - debt(); }
+function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }
@@ -1347,6 +1351,11 @@ const ACHIEVEMENTS = [
   { id: 'ipo', icon: '🔔', name: 'Публічна компанія', desc: 'Проведіть IPO', check: (s) => !!s.ipo },
   { id: 'cities3', icon: '🌍', name: 'Міжнародна корпорація', desc: 'Бізнес у 3 містах', check: (s) => new Set([...s.biz, ...s.fac].map((u) => lotCityId(lotOf(u)))).size >= 3 },
   { id: 'cities6', icon: '🌐', name: 'Глобальна присутність', desc: 'Бізнес у 6 містах', check: (s) => new Set([...s.biz, ...s.fac].map((u) => lotCityId(lotOf(u)))).size >= 6 },
+  { id: 'vc', icon: '🚀', name: 'Венчурний інвестор', desc: 'Успішний вихід зі стартапу', check: (s) => !!(s.vc && s.vc.stats.exits > 0) },
+  { id: 'unicorn', icon: '🦄', name: 'Єдиноріг', desc: 'Вихід зі стартапу-єдинорога', check: (s) => !!(s.vc && s.vc.done.some((d) => d.tier === 'unicorn' && d.got > d.invested)) },
+  { id: 'sponsor', icon: '🤝', name: 'Меценат спорту', desc: 'Спонсоруйте команду', check: (s) => !!(s.sport && s.sport.teams.some((t) => t.sponsor === 'player')) },
+  { id: 'champion', icon: '🏆', name: 'Чемпіон', desc: 'Ваша команда виграла сезон', check: (s) => !!(s.sport && s.sport.trophies > 0) },
+  { id: 'banker', icon: '🏦', name: 'Банкір', desc: 'Отримайте банківську ліцензію', check: (s) => !!s.bank },
   { id: 'takeover', icon: '🦈', name: 'Поглинач', desc: 'Викупіть іншу компанію', check: (s) => s.companies.some((c) => c.owner === 'player') },
   { id: 'top1', icon: '🥇', name: 'Номер один', desc: 'Найдорожча компанія міста', check: () => companyRanking()[0].me },
   { id: 'debt_free', icon: '🏦', name: 'Без боргів', desc: 'Повністю погасіть кредит', check: (s) => s.flags.repaid },

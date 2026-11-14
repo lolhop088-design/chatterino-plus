@@ -41,7 +41,7 @@ function avatarSVG(look, size = 40) {
 const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
-  ['hq', '🏛️', 'Штаб'], ['regions', '🌍', 'Регіони'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
+  ['hq', '🏛️', 'Штаб'], ['regions', '🌍', 'Регіони'], ['ventures', '🚀', 'Стартапи'], ['sponsor', '🏆', 'Спорт'], ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['ranking', '🥇', 'Топ компаній'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
   ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
@@ -381,8 +381,11 @@ const VIEWS = {
   },
 
   bank() {
+    const tab = state.ui.tab === 'credit' ? 'credit' : 'own';
+    const head = tabsHtml([['own', '🏦 Мій банк'], ['credit', '💳 Кредити й рейтинг']], tab);
+    if (tab === 'own') return `<h1>Банк</h1>${head}${ownBankView()}`;
     const lim = creditLimit(), cr = state.me.credit;
-    let html = `<h1>Банк</h1><div class="kpis">${kpi('Кредитний рейтинг', Math.round(cr), cr >= 700 ? 'pos' : cr < 560 ? 'neg' : '', cr >= 700 ? 'відмінний' : cr >= 620 ? 'добрий' : cr >= 560 ? 'задовільний' : 'поганий')}${kpi('Ваша ставка', creditRate().toFixed(1) + '%', '', `облікова ${state.econ.rate.toFixed(2)}%`)}${kpi('Доступний ліміт', money(lim))}${kpi('Борг', money(debt()), debt() ? 'neg' : '')}${kpi('Відсотки на залишок', Math.max(0, state.econ.rate - 2.5).toFixed(1) + '%')}</div>
+    let html = `<h1>Банк</h1>${head}<div class="kpis">${kpi('Кредитний рейтинг', Math.round(cr), cr >= 700 ? 'pos' : cr < 560 ? 'neg' : '', cr >= 700 ? 'відмінний' : cr >= 620 ? 'добрий' : cr >= 560 ? 'задовільний' : 'поганий')}${kpi('Ваша ставка', creditRate().toFixed(1) + '%', '', `облікова ${state.econ.rate.toFixed(2)}%`)}${kpi('Доступний ліміт', money(lim))}${kpi('Борг', money(debt()), debt() ? 'neg' : '')}${kpi('Відсотки на залишок', Math.max(0, state.econ.rate - 2.5).toFixed(1) + '%')}</div>
     <div class="card"><h3>Оформити кредит</h3><p class="muted">Рейтинг росте, коли ви вчасно обслуговуєте борг, і падає при від’ємному балансі. Відсотки списуються щоночі.</p><div class="row wrap">
       ${[5000, 20000, 50000, 150000, 500000, 2000000].map((a) => Math.round(a * priceLvl() / 1000) * 1000).map((a) => `<button class="btn ${a <= lim ? 'primary' : ''}" ${a > lim ? 'disabled' : ''} data-act="loan" data-v="${a}">+ ${moneyK(a)}</button>`).join('')}</div></div>
     <div class="card"><h3>Мої кредити</h3>`;
@@ -500,6 +503,47 @@ const VIEWS = {
     return html;
   },
 
+  ventures() {
+    const V = vcState();
+    const st = V.stats;
+    let html = `<h1>🚀 Стартапи</h1><div class="kpis">${kpi('Портфель', moneyK(venturesValue()), '', `${V.active.length} компаній`)}${kpi('Вкладено всього', moneyK(st.invested))}${kpi('Повернуто', moneyK(st.returned), st.returned >= st.invested ? 'pos' : '')}${kpi('Успіхи / провали', `${st.exits} / ${st.fails}`)}</div>
+      <div class="card"><p class="muted">${Object.values(VC_TIERS).map((T) => `${T.icon} <b>${T.name}</b> — ${T.desc}`).join('<br>')}<br>Перевірка (due diligence, 2% суми) показує справжні шанси. Стартапи з вашої галузі отримують +8% до шансу успіху (ваша експертиза).</p></div>
+      <h3>Нові пропозиції</h3><div class="cards">`;
+    for (const p of V.pitches) {
+      const T = VC_TIERS[p.tier], syn = vcSynergy(p.cat);
+      html += `<div class="card" style="display:block"><div class="row between"><b>${T.icon} ${esc(p.name)}</b><span class="tag">${T.name}</span></div><p style="margin:6px 0">${esc(p.theme)}${syn ? ' <span class="tag good">ваша експертиза</span>' : ''}</p>
+        <small class="muted">Потрібно ${moneyK(p.ask)} за ${Math.round(p.stake * 100)}% · оцінка ${moneyK(p.ask / p.stake)} · ціль ×${T.mult[0]}–${T.mult[1]} за ${T.days[0]}–${T.days[1]} дн. · пропозиція до дня ${p.expires}</small>
+        ${p.dd ? `<p class="${p.p > 0.6 ? 'pos' : p.p > 0.3 ? '' : 'neg'}">🔍 Шанс успіху: ≈${Math.round(clamp(p.p + (syn ? 0.08 : 0), 0, 0.98) * 100)}%, очікуваний множник ×${p.mult}</p>` : ''}
+        <div class="row wrap" style="margin-top:8px">${p.dd ? '' : `<button class="btn sm" data-act="vcDD" data-id="${p.id}">🔍 Перевірити · ${moneyK(ddCost(p))}</button>`}<button class="btn sm primary" ${state.cash < p.ask ? 'disabled' : ''} data-act="vcInvest" data-id="${p.id}">Інвестувати ${moneyK(p.ask)}</button></div></div>`;
+    }
+    html += '</div>';
+    if (V.active.length) {
+      html += `<h3>Мій портфель</h3><div class="card stocklist">${V.active.map((a) => { const ch = a.value / a.invested - 1; const left = Math.max(0, a.start + a.days - state.day); return `<div class="stock"><div><b>${VC_TIERS[a.tier].icon} ${esc(a.name)}</b><br><small>${esc(a.theme)} · вкладено ${moneyK(a.invested)} · до виходу ≈${left} дн.${a.events[0] ? '<br>' + esc(a.events[0]) : ''}</small></div><div class="px">${moneyK(a.value)}<br><small class="${ch < 0 ? 'neg' : 'pos'}">${ch >= 0 ? '+' : ''}${pct(ch, 0)}</small></div>${spark(a.hist.slice(-30))}<div class="trade"><button class="btn sm" data-act="vcSell" data-id="${a.id}">Продати частку за ${moneyK(a.value * 0.85)}</button></div></div>`; }).join('')}</div>`;
+    }
+    if (V.done.length) html += `<div class="card"><h3>Історія</h3><ul class="log">${V.done.slice(0, 15).map((d) => `<li class="${d.got > d.invested ? 'good' : 'bad'}"><small>Д${d.day}</small> ${VC_TIERS[d.tier].icon} ${esc(d.name)}: ${d.how} — ${moneyK(d.invested)} → ${moneyK(d.got)}</li>`).join('')}</ul></div>`;
+    return html;
+  },
+
+  sponsor() {
+    const S = sportState();
+    const lg = state.ui.league || 'football';
+    const mine = myTeams();
+    let html = `<h1>🏆 Спорт і спонсорство</h1><div class="kpis">${kpi('Ваших команд', mine.length)}${kpi('Бонус до покупців', '+' + pct(sponsorTraffic() - 1))}${kpi('Утримання', money(sum(mine, (t) => sponsorCost(t) * (1 + t.invest))) + '/день')}${kpi('Трофеї', S.trophies)}${kpi('Сезон', `${S.season} · ${SEASON_DAYS - (state.day % SEASON_DAYS)} дн. до фіналу`)}</div>
+      <div class="card"><p class="muted">Спонсорство збільшує кількість покупців у всіх ваших магазинах (більше фанатів і сильніша команда — більший ефект). Перемоги додають хайпу, чемпіонство дає +5 репутації всім магазинам. Гоночна команда додатково піднімає продажі ваших авто (+12%). Інвестиції в команду (трансфери, болід) щодня підвищують її силу.</p></div>
+      <div class="chips filter">${Object.entries(LEAGUES).map(([k, L]) => `<button class="chip ${lg === k ? 'on' : ''}" data-act="league" data-v="${k}">${L.icon} ${L.name}</button>`).join('')}</div>
+      <div class="card stocklist">`;
+    const ts = S.teams.filter((t) => t.league === lg).sort((a, b) => b.points - a.points || b.strength - a.strength);
+    ts.forEach((t, i) => {
+      const mineT = t.sponsor === 'player';
+      const co = t.sponsor && !mineT ? coById(t.sponsor) : null;
+      const form = t.form.map((f) => (f === 1 ? '🟢' : f === 0 ? '⚪' : '🔴')).join('');
+      const fee = sponsorCost(t) * (co ? 30 : 10);
+      html += `<div class="stock ${mineT ? 'mine' : ''}"><div><b>#${i + 1} ${LEAGUES[lg].icon} ${esc(t.name)}</b>${mineT ? ' <span class="tag good">ваша</span>' : ''}${t.titles ? ` <span class="tag">🏆×${t.titles}</span>` : ''}<br><small>${t.points} оч. · ${t.played} матчів ${form} · сила ${Math.round(t.strength)} · фанатів ${moneyK(t.reach).replace('$', '')}${co ? ` · спонсор: ${esc(co.name)}` : !mineT ? ' · без спонсора' : ''}</small></div><div class="px">${money(sponsorCost(t))}<br><small class="muted">/день</small></div><span></span>
+        <div class="trade">${mineT ? `<span class="muted">Інвестиції в команду:</span>${[0, 1, 2].map((v) => `<button class="chip ${t.invest === v ? 'on' : ''}" data-act="teamInvest" data-id="${t.id}" data-v="${v}">${v ? '+' + v * 100 + '% бюджету' : 'без'}</button>`).join('')}<button class="btn sm danger" data-act="dropTeam" data-id="${t.id}">Завершити</button>` : `<button class="btn sm primary" ${state.cash < fee ? 'disabled' : ''} data-act="sponsorTeam" data-id="${t.id}">${co ? 'Переманити' : 'Спонсорувати'} · підписання ${moneyK(fee)}</button>`}</div></div>`;
+    });
+    return html + '</div>';
+  },
+
   regions() {
     const ids = Object.keys(CITIES);
     const myCities = new Set([...state.biz, ...state.fac].map((u) => lotCityId(lotOf(u))));
@@ -586,6 +630,47 @@ const VIEWS = {
   },
 };
 
+function bankCardHtml() {
+  const B = state.bank;
+  return `<div class="bankcard"><div class="bc-top"><span class="bc-chip"></span><span class="bc-wave">)))</span></div>
+    <div class="bc-num">${B ? B.card : '4000 •••• •••• ••••'}</div>
+    <div class="bc-bottom"><span>${esc(state.me.name.toUpperCase())}</span><span class="bc-logo">${esc(bankName().split(' ')[0].slice(0, 1))}</span></div></div>`;
+}
+
+function ownBankView() {
+  const B = state.bank;
+  if (!B) {
+    const okNw = netWorth() >= bankMinNetWorth(), okCash = state.cash >= bankLicenseCost();
+    return `<div class="bankapp"><div class="bank-hero"><h2>Власний банк</h2><div class="bank-phone"><div class="bank-top"><div class="bank-bal"><span>Капітал банку</span><b>${moneyK(bankLicenseCost())}</b><div class="bank-pill"><small>Прибуток за годину</small><b>—</b></div></div>${bankCardHtml()}</div>
+      <div class="bank-body"><p>Залучайте депозити, кредитуйте компанії та населення й заробляйте на різниці ставок. Капітал має покривати щонайменше 10% кредитів, інакше вкладники почнуть забирати гроші.</p>
+      <ul class="help"><li>Чистий капітал корпорації від ${moneyK(bankMinNetWorth())} ${okNw ? '✅' : '❌'}</li><li>Ліцензія ${moneyK(bankLicenseCost())} — стає статутним капіталом ${okCash ? '✅' : '❌'}</li></ul>
+      <button class="btn primary" ${okNw && okCash ? '' : 'disabled'} data-act="bankOpen">Отримати банківську ліцензію</button></div></div></div></div>`;
+  }
+  const T = B.today || { income: 0, depCost: 0, losses: 0, opex: 0, profit: 0, paid: 0, pd: 0 };
+  const L = bankLevel(), K = state.econ.rate / 100, car = bankCar();
+  const prog = clamp((L.size - L.prev) / Math.max(1, L.next - L.prev), 0, 1);
+  const rate = (v) => (v * 100).toFixed(2) + '%';
+  const h = B.hist.slice(-30);
+  let html = `<div class="bankapp"><div class="bank-hero"><h2>${esc(bankName())}</h2><div class="bank-phone"><div class="bank-top"><div class="bank-bal"><span>Капітал банку</span><b>${money(B.capital)}</b>
+      <div class="bank-pill"><small>Прибуток за годину</small><b class="${T.profit < 0 ? 'neg' : ''}">${T.profit >= 0 ? '+' : ''}${moneyK(T.profit / 24)}</b></div>
+      <div class="bank-lvl"><span><b>${L.lvl}</b> рівень</span><span>${moneyK(L.next)}</span></div><div class="bank-progress"><i style="width:${(prog * 100).toFixed(0)}%"></i></div></div>${bankCardHtml()}</div>
+    <div class="bank-body">
+      <div class="kpis">${kpi('Депозити', moneyK(B.deposits))}${kpi('Кредити', moneyK(B.loans), '', B.internal ? `з них вашій корпорації ${moneyK(B.internal)}` : '')}${kpi('Норматив капіталу', pct(Math.min(car, 9)), car < 0.1 ? 'neg' : 'pos', 'мін. 10%')}${kpi('Відділень', bankBranches())}</div>
+      ${car < 0.1 && B.loans > 0 ? '<div class="card warn"><p>⚠️ Капіталу замало для такого кредитного портфеля. Внесіть капітал або підніміть ставку кредитів, інакше почнеться відтік вкладників.</p></div>' : ''}
+      <div class="card"><h3>Ставки</h3><p class="muted">Облікова ставка ЦБ: ${rate(K)}. Вища ставка депозитів залучає вкладників; нижча ставка кредитів — позичальників, але більший ризик неповернення при високих ставках.</p>
+        <div class="row between wrap"><span>Депозити: <b>${rate(B.depRate)}</b> <small class="muted">(ринок ≈ ${rate(Math.max(0, K - 0.02))})</small></span><span class="row nowrap"><button class="btn sm" data-act="bankRate" data-k="dep" data-v="-0.0025">−0.25%</button><button class="btn sm" data-act="bankRate" data-k="dep" data-v="0.0025">+0.25%</button></span></div>
+        <div class="row between wrap" style="margin-top:8px"><span>Кредити: <b>${rate(B.loanRate)}</b> <small class="muted">(ринок ≈ ${rate(K + 0.03)} · дефолти ${rate(T.pd)}/рік)</small></span><span class="row nowrap"><button class="btn sm" data-act="bankRate" data-k="loan" data-v="-0.0025">−0.25%</button><button class="btn sm" data-act="bankRate" data-k="loan" data-v="0.0025">+0.25%</button></span></div></div>
+      <div class="card"><h3>Учора</h3><table class="pl"><tr><td>Процентний дохід</td><td class="pos">${money(T.income)}</td></tr><tr><td>Відсотки вкладникам</td><td class="neg">${money(-T.depCost)}</td></tr><tr><td>Неповернені кредити</td><td class="neg">${money(-T.losses)}</td></tr><tr><td>Операційні витрати</td><td class="neg">${money(-T.opex)}</td></tr><tr class="tot"><td>Прибуток банку</td><td>${pn(T.profit)}</td></tr><tr><td>Виплачено вам</td><td>${money(T.paid)}</td></tr></table>
+        <div class="chips" style="margin-top:8px"><small class="muted">Виплата прибутку вам:</small>${[[0, '0% (капітал)'], [0.5, '50%'], [1, '100%']].map(([v, l]) => `<button class="chip ${B.payout === v ? 'on' : ''}" data-act="bankPayout" data-v="${v}">${l}</button>`).join('')}</div></div>
+      <div class="card"><h3>Капітал і корпорація</h3><div class="row wrap">${[10e6, 100e6].map((v) => `<button class="btn sm primary" ${state.cash < v ? 'disabled' : ''} data-act="bankInject" data-v="${v}">+ ${moneyK(v)} у капітал</button>`).join('')}<button class="btn sm" data-act="bankInject" data-v="-10000000">− ${moneyK(10e6)} з капіталу</button></div>
+        <p class="muted" style="margin-top:8px">Банк може кредитувати вашу корпорацію замість сторонніх банків (відсотки лишаються в групі). Вільний ліміт: ${moneyK(Math.max(0, bankMaxLoans() - B.loans))}.</p>
+        <div class="row wrap"><button class="btn sm" data-act="bankLend" data-v="10000000">Позичити корпорації ${moneyK(10e6)}</button>${B.internal ? `<button class="btn sm" data-act="bankRepay">Повернути ${moneyK(Math.min(B.internal, Math.max(0, state.cash)))}</button>` : ''}${state.loans.some((l) => l.kind !== 'mortgage') ? '<button class="btn sm primary" data-act="bankRefi">Рефінансувати зовнішні кредити</button>' : ''}</div></div>
+      <div class="card"><h3>Відділення</h3><p class="muted">Кожне відділення з персоналом дає +15% вкладників і позичальників. Відкриваються на ділянках у торгових районах (як магазини).</p><button class="btn sm" data-act="nav" data-v="map">🏙️ Обрати ділянку</button></div>
+      ${chartBox('chBank', [{ data: h.map((x) => x.deposits), color: '#1fb5a0', name: 'Депозити' }, { data: h.map((x) => x.loans), color: '#e08a3c', name: 'Кредити' }, { data: h.map((x) => x.capital), color: '#a3558a', name: 'Капітал' }], h.map((x) => String(x.day)), 'Баланс банку')}
+    </div></div></div>`;
+  return html;
+}
+
 function influenceNote(co) {
   const { factor, parts } = playerInfluenceParts(co);
   if (Math.abs(factor - 1) < 0.01) return '';
@@ -629,6 +714,7 @@ function lotPanel(l) {
       const comp = state.lots.filter((x) => x.district === l.district && lotCityId(x) === lotCityId(l) && ((x.npc && x.npc.type === k) || (x.ownerKind === 'biz' && bizById(x.owner).type === k))).length;
       html += row(T.icon, T.name, `<span class="stars">${stars(T.aff[l.district] || 0.5)}</span> <small>· конкурентів: ${comp}</small>`, setupCost(k, l) + lotRent(l) * 7, 'openBiz', `data-type="${k}"`);
     }
+    if (state.bank && state.bank.open && FACILITIES.bankbranch.sizes.includes(l.size)) html += '<h4>Банк</h4>' + row('🏦', FACILITIES.bankbranch.name, `<small>+15% вкладників і позичальників «${esc(bankName())}»</small>`, facSetupCost('bankbranch', l) + lotRent(l) * 7, 'openFac', 'data-kind="bankbranch"');
     if (FACILITIES.office.sizes.includes(l.size)) html += '<h4>IT</h4>' + row('💻', FACILITIES.office.name, '<small>Розробка застосунків, ігор, хмарних сервісів</small>', facSetupCost('office', l) + lotRent(l) * 7, 'openFac', 'data-kind="office"');
     const cons = Object.entries(CONSTRUCT).filter(([, C]) => C.sizes.includes(l.size));
     if (cons.length) html += '<h4>Будівництво</h4>' + cons.map(([k, C]) => `<div class="typerow"><span class="big">🏗️</span><div><b>${C.name}</b><br><small>${C.days} днів · потім оренда ${pct(PROP_KINDS[k].yield)}/рік</small><br><small>Вартість ${money(constructCost(k, l))}</small></div><button class="btn primary sm" ${state.cash < constructCost(k, l) ? 'disabled' : ''} data-act="construct" data-lot="${l.id}" data-kind="${k}">Будувати</button></div>`).join('');
@@ -857,6 +943,20 @@ const ACT = {
   foundHQ: () => confirmBox(`Заснувати штаб-квартиру за ${money(hqCost())}?`, foundHQ),
   hqToggle: (d) => { const H = hqState(); H.on[d.k] = !H.on[d.k]; if (H.on[d.k]) { try { HQ_RUN[d.k](); } catch (e) { console.error(e); } toast(`${DIRECTIVES[d.k].exec}: доручення прийнято.`, 'good'); } },
   hqOpt: (d) => { const H = hqState(); H.opts[d.k] = isNaN(+d.v) ? d.v : +d.v; },
+  bankOpen: () => confirmBox(`Отримати банківську ліцензію за ${money(bankLicenseCost())}? Ця сума стане статутним капіталом банку.`, openBank),
+  bankRate: (d) => bankSetRate(d.k, +d.v),
+  bankPayout: (d) => { state.bank.payout = +d.v; },
+  bankInject: (d) => bankInject(+d.v),
+  bankLend: (d) => bankLendToCorp(+d.v),
+  bankRepay: () => bankRepayCorp(state.bank.internal),
+  bankRefi: () => bankRefinance(),
+  vcDD: (d) => vcDueDiligence(d.id),
+  vcInvest: (d) => { const p = vcState().pitches.find((x) => x.id === d.id); confirmBox(`Інвестувати ${money(p.ask)} у «${esc(p.name)}»?`, () => vcInvest(d.id)); },
+  vcSell: (d) => vcSell(d.id),
+  league: (d) => { state.ui.league = d.v; },
+  sponsorTeam: (d) => sponsorTeam(d.id),
+  dropTeam: (d) => confirmBox('Завершити спонсорський контракт?', () => dropTeam(d.id)),
+  teamInvest: (d) => { const t = sportState().teams.find((x) => x.id === d.id); t.invest = +d.v; },
   unlockCity: (d) => confirmBox(`Вийти на ринок міста ${CITIES[d.v].name} за ${money(regionCost(d.v))}?`, () => unlockCity(d.v)),
   goCity: (d) => { state.ui.mapCity = d.v; state.ui.lot = null; state.ui.view = 'map'; },
   mapCity: (d) => { state.ui.mapCity = d.v; state.ui.lot = null; if (use3D()) City3D.control('reset'); },
