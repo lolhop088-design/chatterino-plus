@@ -368,6 +368,7 @@ const LEDGER = {
   shares: { name: 'Операції з акціями', kind: 'cash' },
   loans: { name: 'Кредити (отримано/погашено)', kind: 'cash' },
   equity: { name: 'Залучений капітал (IPO)', kind: 'cash' },
+  admin: { name: 'Адмін-коригування', kind: 'cash' },
   assetSale: { name: 'Продаж активів', kind: 'cash' },
 };
 

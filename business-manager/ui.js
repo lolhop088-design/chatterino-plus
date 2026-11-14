@@ -42,7 +42,7 @@ const NAV = [
   ['dashboard', '📊', 'Огляд', true], ['map', '🏙️', 'Місто', true], ['businesses', '🏪', 'Магазини', true], ['industry', '🏭', 'Виробництво'],
   ['cars', '🚗', 'Авто'], ['tech', '💻', 'IT і R&D'], ['realty', '🏠', 'Нерухомість'], ['staff', '👥', 'Персонал'],
   ['bank', '🏦', 'Банк'], ['stocks', '📈', 'Біржа'], ['finance', '💼', 'Фінанси', true], ['news', '📰', 'Новини'],
-  ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'],
+  ['life', '🧑', 'Життя'], ['achievements', '🏆', 'Досягнення'], ['settings', '⚙️', 'Гра'], ['admin', '🛠️', 'Адмін'],
 ];
 
 function renderTop() {
@@ -73,7 +73,7 @@ function render(force = true) {
   const now = Date.now();
   if (!force && now - lastMainRender < (isMobile() ? 700 : 350)) return;
   if (!force && state.ui.view === 'map' && use3D()) return;
-  if (!force && ['settings', 'achievements', 'cars', 'life'].includes(state.ui.view)) return;
+  if (!force && ['settings', 'achievements', 'cars', 'life', 'admin'].includes(state.ui.view)) return;
   lastMainRender = now;
   renderNav();
   const v = VIEWS[state.ui.view] || VIEWS.dashboard;
@@ -477,6 +477,30 @@ const VIEWS = {
     }).join('')}</div>`;
   },
 
+  admin() {
+    const e = state.econ;
+    const units = [...state.biz, ...state.fac];
+    const btn = (act, label, extra = '', cls = 'primary') => `<button class="btn sm ${cls}" data-act="${act}" ${extra}>${label}</button>`;
+    let html = `<h1>🛠️ Адмін-панель</h1><p class="muted">Режим розробника: зміни застосовуються одразу. Гроші, додані тут, позначаються в обліку як «Адмін-коригування».</p>
+      <div class="card"><h3>💰 Гроші</h3><p>Баланс: <b>${money(state.cash)}</b> · борг ${money(debt())} · рейтинг ${Math.round(state.me.credit)}</p>
+        <div class="row wrap">${[10000, 100000, 1000000, 10000000].map((v) => btn('admAdd', '+' + moneyK(v), `data-v="${v}"`)).join('')}${btn('admAdd', '−' + moneyK(10000), 'data-v="-10000"', 'danger')}</div>
+        <div class="row wrap" style="margin-top:8px"><input type="number" id="admCash" value="${Math.round(state.cash)}" aria-label="Баланс" style="width:160px">${btn('admSetCash', 'Встановити баланс')}${btn('admPayDebt', 'Списати всі кредити', '', '')}${btn('admCredit', 'Рейтинг 850', '', '')}</div></div>
+      <div class="card"><h3>✏️ Назви</h3>
+        <label>Компанія <input value="${esc(state.company)}" data-change="admName" data-k="company" maxlength="40"></label>
+        <label>Ваше ім’я <input value="${esc(state.me.name)}" data-change="admName" data-k="player" maxlength="40"></label>
+        ${units.map((x) => `<label>${x.kind ? FACILITIES[x.kind].icon : TYPES[x.type].icon} Об’єкт <input value="${esc(x.name)}" data-change="admUnitName" data-id="${x.id}" maxlength="40"></label>`).join('')}
+        ${state.carModels.map((m) => `<label>🚗 Модель авто <input value="${esc(m.name)}" data-change="admCarName" data-id="${m.id}" maxlength="30"></label>`).join('')}</div>
+      <div class="card"><h3>🏷️ Ціни в магазинах</h3>${state.biz.length ? state.biz.map((b) => `<details ${state.ui.admOpen === b.id ? 'open' : ''}><summary data-act="admOpen" data-id="${b.id}"><b>${TYPES[b.type].icon} ${esc(b.name)}</b></summary><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Ціна</th><th>Запас</th></tr></thead><tbody>${productsOf(b).map((p) => { const st = b.products[p.id] || {}; return `<tr><td>${esc(p.name)}</td><td><input type="number" step="0.1" min="0.01" value="${(st.price || 0).toFixed(2)}" data-change="price" data-id="${b.id}" data-p="${p.id}" style="width:100px"></td><td><input type="number" min="0" value="${Math.floor(st.stock || 0)}" data-change="admStock" data-id="${b.id}" data-p="${p.id}" style="width:100px"></td></tr>`; }).join('')}</tbody></table></div>
+        <div class="row wrap">${btn('admPrices', 'Усі ціни +10%', `data-id="${b.id}" data-v="1.1"`, '')}${btn('admPrices', 'Усі ціни −10%', `data-id="${b.id}" data-v="0.9"`, '')}${btn('admPrices', 'Ринкові ціни', `data-id="${b.id}" data-v="0"`, '')}</div></details>`).join('') : '<p class="muted">Немає магазинів.</p>'}</div>
+      <div class="card"><h3>📦 Ринок B2B (ціна сировини й товарів)</h3><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Множник</th><th>Ціна</th><th>На складі</th></tr></thead><tbody>${Object.entries(GOODS).map(([g, G]) => `<tr><td>${G.icon} ${G.name}</td><td><input type="number" step="0.05" min="0.1" max="10" value="${state.market[g].mult.toFixed(2)}" data-change="admMkt" data-g="${g}" style="width:90px"></td><td>${money(mktPrice(g), 2)}</td><td><input type="number" min="0" value="${Math.floor(whQty(g))}" data-change="admWh" data-g="${g}" style="width:110px"></td></tr>`).join('')}</tbody></table></div></div>
+      <div class="card"><h3>🏢 Бізнеси й підприємства</h3><div class="row wrap">${btn('admRep', 'Репутація всіх магазинів 100')}${btn('admFill', 'Безкоштовно заповнити склади')}${btn('admRepair', 'Відремонтувати все')}${btn('admLevel', 'Усі рівні та покращення на максимум')}${btn('admSkill', 'Персонал: навичка 5, мораль 100')}${btn('admCands', 'Кандидати-профі на ринку праці')}${btn('admNoComp', 'Прибрати конкурентів з міста', '', 'danger')}</div></div>
+      <div class="card"><h3>📈 Економіка</h3><div class="row wrap">${Object.entries(PHASES).map(([k, P]) => btn('admPhase', P.name, `data-v="${k}"`, e.phase === k ? 'primary' : '')).join('')}</div>
+        <div class="row wrap" style="margin-top:8px"><label>Інфляція % <input type="number" step="0.5" value="${e.inflation.toFixed(1)}" data-change="admEcon" data-k="inflation" style="width:100px"></label><label>Ставка ЦБ % <input type="number" step="0.25" value="${e.rate.toFixed(2)}" data-change="admEcon" data-k="rate" style="width:100px"></label><label>Безробіття % <input type="number" step="0.5" value="${e.unemployment.toFixed(1)}" data-change="admEcon" data-k="unemployment" style="width:100px"></label><label>Податок % <input type="number" step="1" value="${Math.round(e.taxRate * 100)}" data-change="admEcon" data-k="tax" style="width:100px"></label></div>
+        ${btn('admResetPrices', 'Скинути рівень цін, зарплат і нерухомості до 1.0', '', '')}</div>
+      <div class="card"><h3>⏱️ Час і дослідження</h3><div class="row wrap">${btn('admSkip', '+1 день', 'data-v="1"', '')}${btn('admSkip', '+7 днів', 'data-v="7"', '')}${btn('admSkip', '+30 днів', 'data-v="30"', '')}${btn('admResearch', '+1000 очок досліджень')}${btn('admAch', 'Відкрити всі досягнення', '', '')}</div></div>`;
+    return html;
+  },
+
   settings() {
     const q = (typeof City3D !== 'undefined' && City3D.quality()) || 'low';
     return `<h1>Гра</h1><div class="card"><h3>Графіка 3D-міста</h3><div class="chips filter">${[['low', 'Низька (економія батареї)'], ['high', 'Висока (тіні, згладжування)']].map(([k, n]) => `<button class="chip ${q === k ? 'on' : ''}" data-act="quality" data-v="${k}">${n}</button>`).join('')}<button class="chip ${state.ui.no3d ? 'on' : ''}" data-act="toggle3d">${state.ui.no3d ? '2D-мапа (увімкнути 3D)' : 'Вимкнути 3D'}</button></div></div>
@@ -739,6 +763,25 @@ const ACT = {
   rename: (d) => { const u = unitById(d.id); showModal(`<h2>Перейменувати</h2><label>Назва <input id="bizName" maxlength="40" value="${esc(u.name)}"></label><div class="row end"><button class="btn" data-act="modalClose">Скасувати</button><button class="btn primary" data-act="renameOk" data-id="${u.id}">Зберегти</button></div>`); },
   renameOk: (d) => { const v = document.getElementById('bizName').value.trim(); if (v) unitById(d.id).name = v; hideModal(); },
   saveNow: () => { save(); toast('Гру збережено.', 'good'); },
+  // ---- Адмін-панель ----
+  admAdd: (d) => { book('admin', +d.v); toast(`Баланс ${+d.v > 0 ? '+' : ''}${money(+d.v)}.`, 'good'); },
+  admSetCash: () => { const v = +document.getElementById('admCash').value; if (isFinite(v)) { book('admin', v - state.cash); state.negDays = 0; toast(`Баланс: ${money(v)}.`, 'good'); } },
+  admPayDebt: () => { for (const l of state.loans) if (l.prop) { const p = propById(l.prop); if (p) p.mortgage = null; } state.loans = []; toast('Усі кредити списано.', 'good'); },
+  admCredit: () => { state.me.credit = 850; },
+  admPrices: (d) => { const b = bizById(d.id); for (const p of productsOf(b)) { const st = b.products[p.id]; if (st) st.price = +(+d.v ? st.price * +d.v : fairPrice(p)).toFixed(2); } },
+  admOpen: (d) => { state.ui.admOpen = state.ui.admOpen === d.id ? null : d.id; },
+  admRep: () => { for (const b of state.biz) b.rep = 100; },
+  admFill: () => { for (const b of state.biz) { ensureProducts(b); const ps = productsOf(b); for (const p of ps) { const st = b.products[p.id]; st.stock = Math.max(st.stock, Math.floor(storageCap(b) * p.share)); } } toast('Склади заповнено.', 'good'); },
+  admRepair: () => { for (const f of state.fac) { f.cond = 100; f.broken = 0; f.strike = 0; } },
+  admLevel: () => { for (const f of state.fac) f.level = 3; for (const b of state.biz) b.upg = { interior: 3, equipment: 3, storage: 3 }; for (const k of Object.keys(state.depts)) state.depts[k] = 5; },
+  admSkill: () => { for (const p of state.staff) { p.skill = 5; p.morale = 100; } },
+  admCands: () => { for (const role of Object.keys(ROLES)) for (let i = 0; i < 2; i++) { const c = makeCandidate(); c.role = role; c.skill = 5; c.wage = +(marketWage(c) * 0.9).toFixed(1); state.candidates.unshift(c); } toast('Додано кандидатів з навичкою 5.', 'good'); },
+  admNoComp: () => confirmBox('Прибрати всі конкуруючі точки з міста?', () => { for (const l of state.lots) l.npc = null; }),
+  admPhase: (d) => { state.econ.phase = d.v; state.econ.phaseDays = 60; news(`🛠️ Адмін: фаза економіки — ${PHASES[d.v].name}.`, 'econ'); },
+  admResetPrices: () => { Object.assign(state.econ, { priceLevel: 1, wageLevel: 1, housing: 1 }); },
+  admSkip: (d) => { for (let i = 0; i < 24 * +d.v && !state.over; i++) tick(); toast(`Пропущено ${d.v} дн.`, 'good'); },
+  admResearch: () => { state.tech.points += 1000; },
+  admAch: () => { for (const a of ACHIEVEMENTS) if (!state.achievements[a.id]) state.achievements[a.id] = state.day; },
   exportSave: () => {
     const code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
     showModal(`<h2>Код збереження</h2><p class="muted">Скопіюйте весь текст і збережіть у нотатках.</p><textarea id="saveCode" readonly rows="8" class="code">${code}</textarea><div class="row end"><button class="btn" data-act="modalClose">Закрити</button><button class="btn primary" data-act="copySave">Копіювати</button></div>`);
@@ -772,6 +815,13 @@ const ACT = {
 };
 
 const CHANGE = {
+  admName: (el) => { const v = el.value.trim(); if (!v) return; if (el.dataset.k === 'company') state.company = v; else state.me.name = v; },
+  admUnitName: (el) => { const v = el.value.trim(); if (v) unitById(el.dataset.id).name = v; },
+  admCarName: (el) => { const v = el.value.trim(); const m = state.carModels.find((x) => x.id === el.dataset.id); if (v && m) m.name = v; },
+  admStock: (el) => { const b = bizById(el.dataset.id); ensureProducts(b); const v = Math.max(0, Math.floor(+el.value || 0)); b.products[el.dataset.p].stock = v; },
+  admMkt: (el) => { const v = +el.value; if (v > 0) state.market[el.dataset.g].mult = clamp(v, 0.1, 10); },
+  admWh: (el) => { const g = el.dataset.g, v = Math.max(0, Math.floor(+el.value || 0)); const have = whQty(g); if (v > have) whAdd(g, v - have, (v - have) * GOODS[g].price * priceLvl()); else whTake(g, have - v); },
+  admEcon: (el) => { const v = +el.value; if (!isFinite(v)) return; const e = state.econ; if (el.dataset.k === 'tax') e.taxRate = clamp(v / 100, 0, 0.9); else if (el.dataset.k === 'inflation') e.inflation = v; else if (el.dataset.k === 'rate') e.rate = clamp(v, 0, 50); else e.unemployment = clamp(v, 0, 60); },
   price: (el) => { const v = parseFloat(el.value); if (v > 0) bizById(el.dataset.id).products[el.dataset.p].price = Math.round(v * 100) / 100; },
   target: (el) => { const v = parseInt(el.value, 10); if (v >= 0) bizById(el.dataset.id).products[el.dataset.p].target = v; },
   auto: (el) => { bizById(el.dataset.id).autoRestock = el.checked; },
