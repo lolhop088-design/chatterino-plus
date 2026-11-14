@@ -182,6 +182,7 @@ const VIEWS = {
     for (const b of state.biz) { if (!staffOf(b).length) alerts.push(`👥 «${esc(b.name)}» без персоналу. <a data-act="biz" data-id="${b.id}">Відкрити</a>`); else if (stockTotal(b) < 1 && productsOf(b).length) alerts.push(`📦 «${esc(b.name)}»: немає товару. <a data-act="biz" data-id="${b.id}">Відкрити</a>`); }
     for (const f of state.fac) { if (!staffOf(f).length) alerts.push(`👥 ${esc(f.name)} без персоналу. <a data-act="fac" data-id="${f.id}">Відкрити</a>`); else if (f.broken || f.strike) alerts.push(`⚠️ ${esc(f.name)}: ${f.broken ? 'аварія' : 'страйк'}. <a data-act="fac" data-id="${f.id}">Відкрити</a>`); }
     if (state.cash < 0) alerts.push('💸 Від’ємний баланс! 3 дні нижче ліміту — банкрутство.');
+    if (units >= 3 && !state.flags.autoManagers && [...state.biz, ...state.fac].some((x) => !x.manager)) alerts.push('🧑‍💼 Забагато рутини? <a data-act="nav" data-v="staff">Персонал → Відділи</a> → передайте все керуючим.');
     if (alerts.length) html += `<div class="card warn">${alerts.slice(0, 6).map((a) => `<p>${a}</p>`).join('')}</div>`;
     if (!units) {
       html += `<div class="card hero"><h2>Шлях від нуля до імперії</h2><ol>
@@ -364,7 +365,10 @@ const VIEWS = {
       if (!state.staff.length) html += '<div class="card"><p class="muted">Поки нікого не найнято.</p></div>';
       else html += `<div class="card"><div class="table-wrap"><table><thead><tr><th>Працівник</th><th>Навичка</th><th>Мораль</th><th>Ставка</th><th>Місце</th><th></th></tr></thead><tbody>${state.staff.map((p) => `<tr><td>${esc(p.name)}<br><small>${ROLES[p.role]}</small></td><td>${skillDots(p.skill)}</td><td>${bar(p.morale)}<small>${p.morale.toFixed(0)}</small></td><td>${money(p.wage, 1)}<br><small class="${p.wage < marketWage(p) ? 'neg' : 'muted'}">ринок ${money(marketWage(p), 1)}</small></td><td><select data-change="transfer" data-id="${p.id}">${unitOptions(p.unit)}</select></td><td><div class="row nowrap"><button class="btn sm" data-act="raise" data-id="${p.id}">+10%</button><button class="btn danger sm" data-act="fire" data-id="${p.id}">✕</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
     } else {
-      html += `<div class="card"><p class="muted">Відділи головного офісу працюють на всю корпорацію. Утримання: ${money(sum(Object.values(state.depts), deptDaily))}/день.</p></div><div class="cards">${Object.entries(DEPTS).map(([k, D]) => {
+      const nm = [...state.biz, ...state.fac].filter((x) => x.manager).length, tot = state.biz.length + state.fac.length;
+      html += `<div class="card"><h3>🧑‍💼 Аутсорс управління</h3><p>Керуючі ведуть об’єкти замість вас: закупівлі, ціни, найм, ремонти, нові IT-проєкти. ${money(managerCost())}/день за кожен об’єкт.</p><p class="muted">Зараз з керуючим: ${nm}/${tot}.${state.flags.autoManagers ? ' Нові об’єкти отримують керуючого автоматично.' : ''}</p>
+        <div class="row wrap">${state.flags.autoManagers ? '<button class="btn" data-act="allManagers" data-v="0">Відкликати всіх керуючих</button>' : '<button class="btn primary" data-act="allManagers" data-v="1">Призначити керуючих усюди</button>'}</div></div>
+      <div class="card"><p class="muted">Відділи головного офісу працюють на всю корпорацію. Утримання: ${money(sum(Object.values(state.depts), deptDaily))}/день.</p></div><div class="cards">${Object.entries(DEPTS).map(([k, D]) => {
         const l = state.depts[k];
         return `<div class="card camp"><span class="big">${D.icon}</span><div><b>${D.name}</b> <span class="tag">рівень ${l}/5</span><br><small>${D.desc}</small><br><small class="muted">${l ? money(deptDaily(l)) + '/день' : 'не створено'}</small></div><div class="col">${l < 5 ? `<button class="btn primary sm" ${state.cash < deptUpCost(l) ? 'disabled' : ''} data-act="deptUp" data-k="${k}">${l ? '↑' : 'Створити'} ${moneyK(deptUpCost(l))}</button>` : '<span class="tag good">Макс.</span>'}${l ? `<button class="btn sm" data-act="deptDown" data-k="${k}">↓</button>` : ''}</div></div>`;
       }).join('')}</div>`;
@@ -551,7 +555,9 @@ const BIZ_TABS = {
     html += `</div><div class="card"><h3>Керування</h3><div class="row wrap">
       <label>Відкриття <select data-change="hours" data-k="open" data-id="${b.id}">${hourOpts(0, 23, b.open)}</select></label>
       <label>Закриття <select data-change="hours" data-k="close" data-id="${b.id}">${hourOpts(1, 24, b.close)}</select></label></div>
-      <label class="switch"><input type="checkbox" data-change="manager" data-id="${b.id}" ${b.manager ? 'checked' : ''}> Керуючий (${money(managerCost())}/день): автозакупівля без націнки, +5% швидкості, працює без вас</label>
+      <label class="switch"><input type="checkbox" data-change="manager" data-id="${b.id}" ${b.manager ? 'checked' : ''}> <span><b>Керуючий</b> (${money(managerCost())}/день) — повний аутсорс</span></label>
+      <p class="muted">Протягом дня дозакуповує товар (+2%), підлаштовує запаси під попит, тримає ціни за інфляцією, наймає й замінює персонал, підвищує зарплати при низькій моралі, оновлює обладнання при чергах. +5% швидкості.</p>
+      ${b.manager ? `<label>Цінова політика <select data-change="priceMode" data-id="${b.id}">${Object.entries(PRICE_MODES).map(([k, m]) => `<option value="${k}" ${(b.priceMode || 'market') === k ? 'selected' : ''}>${m.name} (×${m.k})</option>`).join('')}</select></label>` : ''}
       <p class="muted">${openHours(b)} год/день · зарплати ${money(dailyWages(b))}/день · оренда ${money(lotRent(lotOf(b)))}/день</p></div>
       <div class="card"><h3>Продаж</h3><p class="muted">Покупець пропонує ${money(bizValue(b))}.</p><button class="btn danger" data-act="sell" data-id="${b.id}">Продати</button></div>`;
     return html;
@@ -630,7 +636,7 @@ function facTab(f) {
   html += `<div class="card"><h3>Обладнання</h3>${bar(f.cond)}<p>Стан ${f.cond.toFixed(0)}%${f.broken ? ` · <b class="neg">аварія, ${f.broken} дн.</b>` : ''}${f.strike ? ` · <b class="neg">страйк ${f.strike} дн.</b>` : ''}</p><div class="row wrap">
     <button class="btn" ${repairCost(f) <= 0 ? 'disabled' : ''} data-act="repair" data-id="${f.id}">🔧 Ремонт ${money(repairCost(f))}</button>
     ${f.level < 3 ? `<button class="btn primary" ${state.cash < facUpgradeCost(f) ? 'disabled' : ''} data-act="facUp" data-id="${f.id}">⬆ Рівень ${f.level + 1}: ${moneyK(facUpgradeCost(f))}</button>` : '<span class="tag good">Макс. рівень</span>'}</div>
-    <label class="switch"><input type="checkbox" data-change="manager" data-id="${f.id}" ${f.manager ? 'checked' : ''}> Керуючий (${money(managerCost())}/день): авторемонт, +5% виробництва</label></div>
+    <label class="switch"><input type="checkbox" data-change="manager" data-id="${f.id}" ${f.manager ? 'checked' : ''}> <span><b>Керуючий</b> (${money(managerCost())}/день): укомплектовує штат, ремонтує, закуповує сировину, тримає мораль, +5% виробництва</span></label></div>
     <div class="card"><h3>Продаж</h3><p class="muted">Оцінка: ${money(facValue(f))}.</p><button class="btn danger" data-act="sellFac" data-id="${f.id}">Продати</button></div>`;
   return html;
 }
@@ -645,7 +651,7 @@ function officeTab(f) {
   }
   const done = state.projects.filter((p) => p.office === f.id && p.status !== 'dev');
   if (done.length) html += `<div class="card"><h3>Випущені продукти</h3><table><thead><tr><th>Продукт</th><th>Якість</th><th>Користувачі</th><th>Дохід/день</th></tr></thead><tbody>${done.map((p) => `<tr><td>${SOFT[p.kind].icon} ${esc(p.name)}</td><td>${p.quality}</td><td>${Math.round(p.users).toLocaleString('uk-UA')}</td><td>${money(p.rev)}</td></tr>`).join('')}</tbody></table></div>`;
-  html += `<div class="card"><label class="switch"><input type="checkbox" data-change="manager" data-id="${f.id}" ${f.manager ? 'checked' : ''}> Тімлід (${money(managerCost())}/день): +5% швидкості</label><p class="muted">Оренда ${money(lotRent(lotOf(f)))}/день · оцінка ${money(facValue(f))}</p><button class="btn danger" data-act="sellFac" data-id="${f.id}">Продати офіс</button></div>`;
+  html += `<div class="card"><label class="switch"><input type="checkbox" data-change="manager" data-id="${f.id}" ${f.manager ? 'checked' : ''}> <span><b>Тімлід</b> (${money(managerCost())}/день): наймає програмістів, сам запускає нові проєкти, +5% швидкості</span></label><p class="muted">Оренда ${money(lotRent(lotOf(f)))}/день · оцінка ${money(facValue(f))}</p><button class="btn danger" data-act="sellFac" data-id="${f.id}">Продати офіс</button></div>`;
   return html;
 }
 
@@ -720,6 +726,7 @@ const ACT = {
   period: (d) => { state.ui.period = +d.v; },
   newsCat: (d) => { state.ui.newsCat = d.v; },
   deptUp: (d) => deptUp(d.k),
+  allManagers: (d) => setAllManagers(d.v === '1'),
   deptDown: (d) => { state.depts[d.k] = Math.max(0, state.depts[d.k] - 1); },
   takeJob: (d) => takeJob(d.k),
   quitJob: () => quitJob(),
@@ -748,7 +755,8 @@ const CHANGE = {
   target: (el) => { const v = parseInt(el.value, 10); if (v >= 0) bizById(el.dataset.id).products[el.dataset.p].target = v; },
   auto: (el) => { bizById(el.dataset.id).autoRestock = el.checked; },
   useOwn: (el) => { bizById(el.dataset.id).useOwn = el.checked; },
-  manager: (el) => { unitById(el.dataset.id).manager = el.checked; },
+  manager: (el) => { const u = unitById(el.dataset.id); u.manager = el.checked; if (u.manager) { if (u.kind) managerFacDay(u); else managerRetailDay(u); } },
+  priceMode: (el) => { const b = bizById(el.dataset.id); b.priceMode = el.value; managerRetailDay(b); },
   autoBuy: (el) => { facById(el.dataset.id).autoBuy = el.checked; },
   recipe: (el) => { const f = facById(el.dataset.id); f.recipe = el.value || null; ensureAutoSell(f); },
   transfer: (el) => transfer(el.dataset.id, el.value),

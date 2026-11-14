@@ -189,7 +189,7 @@ function simulateHour(b, h) {
     const accept = clamp(1 - e * (st.price / fairPrice(p) - 1), 0, 1.3);
     const want = sround(served * p.share * accept);
     const s = Math.min(want, Math.floor(st.stock));
-    st.stock -= s; st.sold += s;
+    st.stock -= s; st.sold += s; st.miss = (st.miss || 0) + (want - s);
     rev += s * st.price; cogs += s * st.cost; wanted += want; sold += s;
     if (p.carOnly && s) { const m = state.carModels.find((x) => x.id === p.id); if (m) m.sold += s; }
   }
@@ -224,6 +224,7 @@ function openBusiness(lotId, type) {
     products: {}, today: emptyDay(), yest: null, history: [], opened: state.day,
   };
   lot.owner = b.id; lot.ownerKind = 'biz';
+  if (state.flags.autoManagers) b.manager = true;
   state.biz.push(b);
   ensureProducts(b);
   log(`Відкрито «${b.name}» (${DMAP[lot.district].name}). Витрати: ${money(cost)}.`, 'good');
@@ -367,6 +368,7 @@ function openFacility(lotId, kind) {
   lot.owner = f.id; lot.ownerKind = 'fac';
   state.fac.push(f);
   ensureAutoSell(f);
+  if (state.flags.autoManagers) f.manager = true;
   log(`Збудовано: ${F.name} (${DMAP[lot.district].name}) за ${money(cost)}.`, 'good');
   toast(`${F.icon} ${F.name} готовий! Наймайте персонал.`, 'good');
   checkAchievements();
@@ -685,14 +687,14 @@ function research(f) {
 }
 
 // ================= Персонал =================
-function hire(candId, unitId) {
+function hire(candId, unitId, by) {
   const c = state.candidates.find((x) => x.id === candId);
   const u = unitById(unitId);
   if (!c || !u) return toast('Оберіть, куди найняти.', 'bad');
   if (staffOf(u).length >= maxStaff(u)) return toast('Немає вільних місць.', 'bad');
   state.candidates = state.candidates.filter((x) => x !== c);
   state.staff.push({ id: c.id, name: c.name, role: c.role, skill: c.skill, wage: c.wage, unit: u.id, morale: 70, hired: state.day });
-  log(`Найнято ${c.name} (${ROLES[c.role]}) у «${u.name}».`);
+  log(`${by ? '🧑‍💼 Керуючий найняв' : 'Найнято'} ${c.name} (${ROLES[c.role]}, навичка ${c.skill.toFixed(1)}) у «${u.name}».`);
   checkAchievements();
 }
 function fire(id) {
@@ -970,9 +972,87 @@ function randomEvent() {
   pick(evs)();
 }
 
+// ================= Керуючі (аутсорс управління) =================
+// Керуючий: дозакуповує товар протягом дня, підлаштовує запаси під попит, тримає ціни відносно ринку
+// (з урахуванням інфляції), наймає й замінює персонал, підвищує зарплати при низькій моралі.
+// На заводі: укомплектовує штат, ремонтує, тримає автопостачання; в IT-офісі ще й запускає нові проєкти.
+const PRICE_MODES = { cheap: { name: 'Дешево', k: 0.93 }, market: { name: 'Ринкова ціна', k: 1.0 }, premium: { name: 'Преміум', k: 1.12 } };
+function bestCandidate(role, minSkill = 0) {
+  const pool = state.candidates.filter((c) => c.role === role && c.skill >= minSkill);
+  if (!pool.length) return null;
+  return pool.sort((a, b) => (b.skill * b.skill) / b.wage - (a.skill * a.skill) / a.wage)[0];
+}
+function managerHire(u, n) {
+  const role = unitRole(u);
+  let hired = 0;
+  while (hired < n && staffOf(u).length < maxStaff(u)) {
+    const c = bestCandidate(role);
+    if (!c) break;
+    hire(c.id, u.id, true); hired++;
+  }
+  return hired;
+}
+function managerFixMorale(u) {
+  for (const p of staffOf(u)) if (p.morale < 45 && p.wage < marketWage(p) * 1.15) { p.wage = +(p.wage * 1.1).toFixed(1); p.morale = Math.min(100, p.morale + 12); }
+}
+function managerRetailHour(b) {
+  if (!b.manager || state.hour < b.open || state.hour >= b.close) return;
+  for (const p of productsOf(b)) {
+    const st = b.products[p.id];
+    if (st && st.target > 0 && st.stock < st.target * 0.3) buyStock(b, p.id, st.target - st.stock, 1.02, true);
+  }
+}
+function managerRetailDay(b) {
+  if (!b.manager) return;
+  const cap = storageCap(b), prods = productsOf(b);
+  const mode = PRICE_MODES[b.priceMode || 'market'];
+  for (const p of prods) {
+    const st = b.products[p.id];
+    if (!st) continue;
+    // ціни йдуть за інфляцією й не падають нижче собівартості
+    const unit = p.carOnly ? st.cost : wholesale(b, p);
+    st.price = +Math.max(fairPrice(p) * mode.k, unit * 1.15).toFixed(2);
+    // запаси під фактичний попит
+    const sold = st.soldY || 0, miss = st.missY || 0;
+    if (miss > 0) st.target = Math.round(st.target * 1.25 + miss);
+    else if (p.spoil > 0 && sold < st.target * 0.5) st.target = Math.max(5, Math.round(st.target * 0.9));
+  }
+  const tot = sum(prods, (p) => (b.products[p.id] ? b.products[p.id].target : 0));
+  if (tot > cap) for (const p of prods) if (b.products[p.id]) b.products[p.id].target = Math.max(1, Math.floor(b.products[p.id].target * cap / tot));
+  b.autoRestock = true;
+  // персонал
+  const y = b.yest;
+  if (!staffOf(b).length) managerHire(b, 1);
+  if (y && y.lost > Math.max(5, y.served * 0.08)) {
+    if (!managerHire(b, 1) && b.upg.equipment < MAX_UPG && state.cash > upgradeCost(b, 'equipment') * 3) { upgradeBiz(b, 'equipment'); log(`🧑‍💼 ${b.name}: керуючий оновив обладнання — черги.`); }
+  }
+  managerFixMorale(b);
+}
+function managerFacDay(f) {
+  if (!f.manager) return;
+  f.autoBuy = true;
+  managerHire(f, maxStaff(f) - staffOf(f).length);
+  managerFixMorale(f);
+  if (f.kind === 'office' && !state.projects.some((p) => p.office === f.id && p.status === 'dev') && staffOf(f).length) {
+    const kinds = Object.keys(SOFT).filter((k) => state.tech.it >= SOFT[k].tech);
+    const k = kinds.includes('cloud') && staffOf(f).length >= 6 ? 'cloud' : kinds.includes('game') && staffOf(f).length >= 4 ? 'game' : 'app';
+    startProject(f.id, k, `${SOFT[k].name} №${state.projects.length + 1}`);
+  }
+}
+function setAllManagers(on) {
+  state.flags.autoManagers = on;
+  for (const u of [...state.biz, ...state.fac]) u.manager = on;
+  log(on ? '🧑‍💼 Управління всіма об’єктами передано керуючим (аутсорс).' : 'Керуючих відкликано з усіх об’єктів.', 'good');
+}
+function managersMorning() {
+  for (const b of state.biz) managerRetailDay(b);
+  for (const f of state.fac) managerFacDay(f);
+}
+
 // ================= Ритм часу =================
 function morning() {
   deliverOrders();
+  managersMorning();
   for (const b of state.biz) {
     if (!b.autoRestock) continue;
     let spent = 0, short = false;
@@ -995,7 +1075,7 @@ function retailEndOfDay() {
       const st = b.products[p.id];
       if (!st) continue;
       if (p.spoil > 0 && st.stock > 0) { const lost = Math.floor(st.stock * p.spoil); st.stock -= lost; spoil += lost * st.cost; }
-      st.soldY = st.sold; st.sold = 0;
+      st.soldY = st.sold; st.sold = 0; st.missY = st.miss || 0; st.miss = 0;
     }
     book('wages', -wages); book('rent', -rent); book('marketing', -mkt);
     const t = b.today;
@@ -1060,7 +1140,7 @@ function tick() {
   state.hour++;
   if (state.hour >= 24) { state.hour = 0; endOfDay(); if (state.over) return; }
   if (state.hour === 6) morning();
-  for (const b of state.biz) simulateHour(b, state.hour);
+  for (const b of state.biz) { managerRetailHour(b); simulateHour(b, state.hour); }
   for (const f of HOOKS.hour) f();
 }
 

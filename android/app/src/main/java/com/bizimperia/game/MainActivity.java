@@ -2,7 +2,10 @@ package com.bizimperia.game;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.WindowInsets;
+import android.widget.FrameLayout;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -22,7 +25,23 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);
         web.setWebViewClient(new WebViewClient());
         web.setBackgroundColor(0xFF11141B);
-        setContentView(web);
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(0xFF11141B);
+        root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(root);
+        // Android 15+ малює вікно під системними панелями: відступаємо на їхню висоту.
+        root.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top, bottom, left, right;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets i = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                top = i.top; bottom = i.bottom; left = i.left; right = i.right;
+            } else {
+                top = insets.getSystemWindowInsetTop(); bottom = insets.getSystemWindowInsetBottom();
+                left = insets.getSystemWindowInsetLeft(); right = insets.getSystemWindowInsetRight();
+            }
+            v.setPadding(left, top, right, bottom);
+            return insets;
+        });
         web.loadUrl("file:///android_asset/index.html");
     }
 
