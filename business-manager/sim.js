@@ -199,7 +199,7 @@ function trafficMult(districtId, type, C = city()) {
 }
 function retailCapacity(b) {
   const T = TYPES[b.type];
-  return sum(staffOf(b), (p) => T.cap * (0.5 + effSkill(p, 'sales') * 0.2)) * (1 + 0.2 * (b.upg.equipment - 1)) * (1 + 0.05 * state.tech.retail + (typeof sciFx === 'function' ? sciFx('retail') : 0)) * (b.manager ? 1.05 : 1) * absentPenalty(b);
+  return sum(staffOf(b), (p) => T.cap * (0.5 + effSkill(p, 'sales') * 0.2)) * (1 + 0.2 * (b.upg.equipment - 1)) * (1 + 0.05 * state.tech.retail + (typeof sciFx === 'function' ? sciFx('retail') : 0)) * (b.manager ? 1.05 : 1) * absentPenalty(b) * (typeof groupMult === 'function' ? groupMult(b) : 1);
 }
 
 function simulateHour(b, h) {
@@ -445,7 +445,7 @@ function facStaffFactor(f) {
 function facRateFull(f, r) {
   if (!r) return 0;
   const rate = f.kind === 'carplant' ? 5 : r.rate;
-  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry + (typeof sciFx === 'function' ? sciFx('factory') : 0) + (f.kind === 'chipfab' ? (typeof sciFx === 'function' ? sciFx('chipfab') : 0) : 0) + (f.kind === 'powerplant' ? (typeof sciFx === 'function' ? sciFx('power') : 0) : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'industry') : 1);
+  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry + (typeof sciFx === 'function' ? sciFx('factory') : 0) + (f.kind === 'chipfab' ? (typeof sciFx === 'function' ? sciFx('chipfab') : 0) : 0) + (f.kind === 'powerplant' ? (typeof sciFx === 'function' ? sciFx('power') : 0) : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (typeof groupMult === 'function' ? groupMult(f) : 1) * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'industry') : 1);
 }
 function facValue(f) { return Math.round(f.bookVal * 0.7); }
 function sellFac(f) {
@@ -1015,6 +1015,8 @@ function migrateState() {
   if (typeof cityState === 'function') cityState();
   if (typeof lifeState === 'function') lifeState();
   if (typeof clubsState === 'function') clubsState();
+  if (typeof groupState === 'function') groupState();
+  if (typeof hqState === 'function') hqState();
 }
 
 // ================= Поглинання компаній =================

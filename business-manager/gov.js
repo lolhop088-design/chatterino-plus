@@ -84,6 +84,7 @@ function openCase(target, type, market, share, why) {
   const G = govState();
   if (G.cases.some((c) => c.target === target && c.market === market && c.type === type && c.stage !== 'closed')) return null;
   const c = { id: 'AMC-' + (G.seq++), target, type, market, share, why, opened: state.day, evidence: Math.round(rnd(10, 30) + share * 40), stage: 'investigation', due: state.day + ri(20, 40), log: [] };
+  if (target === 'player' && market && typeof subOfType === 'function') { const s = subOfType(market.split('|')[1]); if (s) { c.sub = s.id; if (s.compliance) c.evidence -= 12; } }
   G.cases.unshift(c);
   if (G.cases.length > 60) G.cases.length = 60;
   news(`⚖️ АМКУ відкрив справу ${c.id} проти «${groupName(target)}»: ${CASE_TYPES[type].toLowerCase()} (${market ? marketName(market) : 'ринок B2B'}, частка ${Math.round(share * 100)}%).`, 'econ', target === 'player' ? 'bad' : '');
@@ -101,11 +102,12 @@ function antitrustDaily() {
     for (const [g, w] of Object.entries(M.by)) {
       if (g === 'local') continue;
       const share = w / M.total;
-      if (share >= 0.4 && chance(0.004 * (1 + (share - 0.4) * 12) * S)) openCase(g, 'dominance', M.key, share, 'стійко висока частка ринку');
+      const rm = g === 'player' && typeof caseRiskMult === 'function' ? caseRiskMult(M.type) : 1;
+      if (share >= 0.4 && chance(0.004 * (1 + (share - 0.4) * 12) * S * rm)) openCase(g, 'dominance', M.key, share, 'стійко висока частка ринку');
       if (g === 'player' && share >= 0.2) {
         const mine = state.biz.filter((b) => b.type === M.type && lotCityId(lotOf(b)) === M.city);
         const ratio = mine.length ? sum(mine, bizPriceRatio) / mine.length : 1;
-        if (ratio < 0.85 && chance(0.01 * S)) openCase('player', 'dumping', M.key, share, `ціни нижче ринку на ${Math.round((1 - ratio) * 100)}% (скарги конкурентів)`);
+        if (ratio < 0.85 && chance(0.01 * S * rm)) openCase('player', 'dumping', M.key, share, `ціни нижче ринку на ${Math.round((1 - ratio) * 100)}% (скарги конкурентів)`);
       }
     }
     // Картель: двоє найбільших ІІ-гравців утримують > 70% ринку
@@ -143,9 +145,9 @@ function decideCase(c) {
     return;
   }
   const G = govState();
-  const repeat = c.target === 'player' ? G.violations.player || 0 : 0;
+  const repeat = c.target === 'player' ? (typeof caseRepeat === 'function' ? caseRepeat(c) : G.violations.player || 0) : 0;
   const rate = clamp(0.01 + (c.evidence - 50) / 50 * 0.06 + c.share * 0.03 + repeat * 0.01, 0.01, 0.1) * Math.max(0.5, S);
-  c.fine = Math.round(annualTurnover(c.target) * rate);
+  c.fine = Math.round((typeof caseTurnover === 'function' ? caseTurnover(c) : annualTurnover(c.target)) * rate * (c.target === 'player' && typeof caseMitigation === 'function' ? caseMitigation(c) : 1));
   const [city, type] = c.market ? c.market.split('|') : [null, null];
   const remedies = [];
   if (c.type === 'dumping') { G.floors.push({ city, type, until: state.day + 90 }); remedies.push('мінімальна ціна 95% ринкової на 90 днів'); }
@@ -154,12 +156,12 @@ function decideCase(c) {
     if (n) remedies.push(`примусовий продаж ${n} точок`);
     G.bans.push({ target: c.target, city, type, until: state.day + 120 }); remedies.push('заборона відкривати нові точки на 120 днів');
   }
-  if ((c.type === 'dominance' && c.share >= 0.8) || repeat >= 2) { const s = forceBreakup(c.target); if (s) remedies.push(s); }
+  if ((c.type === 'dominance' && c.share >= 0.8) || repeat >= 2) { const sb = c.target === 'player' && typeof caseSub === 'function' ? caseSub(c) : null; const s = sb ? spinOff(sb.id, true) : forceBreakup(c.target); if (s) remedies.push(s); }
   if (c.type === 'cartel') remedies.push('заборона узгоджених дій');
   if (c.type === 'foreclosure') { state.flags.noContracts = false; remedies.push('обов’язок постачати конкурентам'); }
   c.outcome = `Порушення: штраф ${moneyK(c.fine)}${remedies.length ? '; ' + remedies.join('; ') : ''}`;
   if (c.target === 'player') {
-    book('fines', -c.fine); G.violations.player = repeat + 1;
+    book('fines', -c.fine); G.violations.player = (G.violations.player || 0) + 1; { const sb = typeof caseSub === 'function' ? caseSub(c) : null; if (sb) sb.violations++; }
     c.appealUntil = state.day + 10;
     log(`⚖️ Рішення у справі ${c.id}: ${c.outcome}. Можна оскаржити в суді протягом 10 днів.`, 'bad');
   } else { const co = coById(c.target); if (co) co.cash -= c.fine; c.stage = 'closed'; }

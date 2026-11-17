@@ -386,6 +386,7 @@ const LEDGER = {
   corpwar: { name: 'Корпоративні війни й юристи', kind: 'exp' },
   sportExp: { name: 'Спортивні клуби (зарплати, трансфери)', kind: 'exp' },
   luxury: { name: 'Утримання розкоші', kind: 'exp' },
+  minority: { name: 'Частка міноритаріїв дочірніх', kind: 'exp' },
   family: { name: 'Родина, освіта, медицина', kind: 'exp' },
   charity: { name: 'Благодійність', kind: 'exp' },
   capex: { name: 'Капітальні вкладення', kind: 'cash' },
