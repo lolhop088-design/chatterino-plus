@@ -130,11 +130,21 @@ const lotOf = (u) => lotById(u.lotId);
 const bizById = (id) => state.biz.find((b) => b.id === id);
 const facById = (id) => state.fac.find((f) => f.id === id);
 const unitById = (id) => bizById(id) || facById(id);
-const staffOf = (u) => state.staff.filter((p) => p.unit === u.id);
+// Індекс персоналу за об’єктами (перебудовується, лише коли змінюється склад).
+let _staffIdx = null, _staffRef = null, _staffLen = -1;
+const staffDirty = () => { _staffIdx = null; };
+function staffOf(u) {
+  if (!_staffIdx || _staffRef !== state.staff || _staffLen !== state.staff.length) {
+    _staffIdx = new Map();
+    for (const p of state.staff) { let a = _staffIdx.get(p.unit); if (!a) _staffIdx.set(p.unit, (a = [])); a.push(p); }
+    _staffRef = state.staff; _staffLen = state.staff.length;
+  }
+  const a = _staffIdx.get(u.id); return a ? a.slice() : [];
+}
 const propById = (id) => state.props.find((p) => p.id === id);
 const unitRole = (u) => (u.kind ? FACILITIES[u.kind].role : 'sales');
 const effSkill = (p, role) => p.skill * (p.role === role ? 1 : 0.55) * (0.6 + 0.4 * p.morale / 100);
-const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * cityOfLot(lot).rent * state.econ.housing * (state.world ? fxPriceFactor(lotCityId(lot)) : 1));
+const lotRent = (lot) => Math.round(SIZES[lot.size].m2 * RENT_PER_M2 * DMAP[lot.district].rent * cityOfLot(lot).rent * state.econ.housing * (state.world ? fxPriceFactor(lotCityId(lot)) : 1) * (typeof landMult === 'function' ? landMult(lot) : 1));
 const debt = () => sum(state.loans, (l) => l.amount);
 const modMult = (kind, key) => { let m = 1; for (const md of state.mods) if (md.kind === kind && (md.key == null || md.key === key)) m *= md.mult; return m; };
 function maxStaff(u) {
@@ -186,8 +196,8 @@ function competitors(b) {
   return s * modMult('pricewar', b.type);
 }
 function trafficMult(districtId, type, C = city()) {
-  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * modMult('demand', type) * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
-  if (typeof cityMult === 'function' && typeof cityIdOf === 'function') { const cid = cityIdOf(C); m *= cityMult(cid, 'traffic'); if (districtId === 'center' || districtId === 'river') m *= cityMult(cid, 'tourism'); }
+  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * modMult('demand', type) * (typeof approvalTraffic === 'function' ? approvalTraffic() : 1) * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  if (typeof cityMult === 'function' && typeof cityIdOf === 'function') { const cid = cityIdOf(C); m *= cityMult(cid, 'traffic') * (typeof districtTraffic === 'function' ? districtTraffic(cid, districtId) : 1); if (districtId === 'center' || districtId === 'river') m *= cityMult(cid, 'tourism'); }
   if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
   if (wd >= 5) {
@@ -354,7 +364,7 @@ function whTake(g, qty) {
 const mktPrice = (g) => GOODS[g].price * priceLvl() * state.market[g].mult * (state.world ? commodFactor(g) : 1);
 const sellPrice = (g) => mktPrice(g) * (0.93 + 0.025 * state.depts.sales);
 const buyPrice = (g) => mktPrice(g) * 1.05;
-const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount() * (typeof cityMult === 'function' ? cityMult(state.city, 'transport') : 1);
+const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount() * (typeof cityMult === 'function' ? cityMult(state.city, 'transport') : 1) * (typeof jamMult === 'function' ? jamMult(state.city) : 1);
 function marketSell(g, qty, silent) {
   qty = Math.floor(Math.min(qty, whQty(g)));
   if (qty <= 0) return 0;
@@ -634,6 +644,7 @@ function constructCost(kind, lot) { return Math.round(CONSTRUCT[kind].cost * (lo
 function construct(lotId, kind) {
   const lot = lotById(lotId), C = CONSTRUCT[kind];
   if (!lot || lot.npc || lot.owner || !C.sizes.includes(lot.size)) return;
+  if (C.dists && !C.dists.includes(lot.district)) return toast('Хмарочоси дозволено будувати лише в центрі, діловому кварталі й на набережній.', 'bad');
   const cost = constructCost(kind, lot);
   if (state.cash < cost) return toast(`Потрібно ${money(cost)}.`, 'bad');
   book('capex', -cost);
@@ -748,7 +759,7 @@ function transfer(id, unitId) {
   const p = state.staff.find((x) => x.id === id), u = unitById(unitId);
   if (!p || !u || p.unit === unitId) return;
   if (staffOf(u).length >= maxStaff(u)) return toast('Там уже максимум працівників.', 'bad');
-  p.unit = unitId; log(`${p.name} переведено в «${u.name}».`);
+  p.unit = unitId; staffDirty(); log(`${p.name} переведено в «${u.name}».`);
 }
 function raise(id) { const p = state.staff.find((x) => x.id === id); if (!p) return; p.wage = +(p.wage * 1.1).toFixed(1); p.morale = Math.min(100, p.morale + 12); toast(`${p.name}: зарплату підвищено на 10%.`, 'good'); }
 function bonusAll(u) {
@@ -767,7 +778,8 @@ function staffDaily() {
     if (p.morale < 25 && chance(0.05)) { state.staff = state.staff.filter((x) => x !== p); log(`${p.name} звільнився(-лась): низька мораль і зарплата нижче ринку.`, 'bad'); }
   }
   state.candidates = state.candidates.filter((c) => state.day - c.since < 4 || chance(0.5));
-  while (state.candidates.length < 10) state.candidates.push(makeCandidate());
+  const target = typeof laborPoolSize === 'function' ? laborPoolSize() : 10;
+  while (state.candidates.length < target) state.candidates.push(typeof makeCandidate2 === 'function' ? makeCandidate2() : makeCandidate());
 }
 
 // ================= Банк =================
@@ -1018,6 +1030,10 @@ function migrateState() {
   if (typeof groupState === 'function') groupState();
   if (typeof liveState === 'function') liveState();
   if (typeof finState === 'function') finState();
+  if (typeof cityxState === 'function') cityxState();
+  if (typeof laborState === 'function') laborState();
+  if (typeof opinionState === 'function') opinionState();
+  if (typeof pol2State === 'function') pol2State();
   if (typeof corp2State === 'function') corp2State();
   if (typeof hqState === 'function') hqState();
 }
@@ -1349,7 +1365,7 @@ function endOfDay() {
   state.led = {};
   if (state.day % 7 === 0) {
     const wk = sum(state.ledger.slice(-7), (x) => x.profit - (x.salary || 0));
-    if (wk > 0) { const tax = wk * state.econ.taxRate * (1 - 0.04 * state.depts.accounting) * (typeof holdingTax === 'function' ? holdingTax() : 1); book('tax', -tax); log(`Сплачено податок на прибуток: ${money(tax)} (${pct(state.econ.taxRate, 0)}).`); }
+    if (wk > 0) { const tax = wk * (typeof effectiveTaxRate === 'function' ? effectiveTaxRate() : state.econ.taxRate) * (1 - 0.04 * state.depts.accounting) * (typeof holdingTax === 'function' ? holdingTax() : 1); book('tax', -tax); log(`Сплачено податок на прибуток: ${money(tax)} (${pct(typeof effectiveTaxRate === 'function' ? effectiveTaxRate() : state.econ.taxRate, 1)} з урахуванням галузевих ставок).`); }
   }
   state.mods = state.mods.filter((m) => --m.days > 0);
   const rev = (L.sales || 0) + (L.b2b || 0) + (L.software || 0) + (L.rentInc || 0);

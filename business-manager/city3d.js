@@ -345,6 +345,7 @@ const City3D = (() => {
         const K = PROP_KINDS[pr.kind];
         if (pr.kind === 'mall') { gb.box(w, 8, d, 0, 0, 0, '#d9cfc0', true); gb.box(w * 0.6, 1.4, 0.3, 0, 8, p.face * (d / 2), '#d64a3a'); top = 10; }
         else if (pr.kind === 'complex') { gb.box(w * 0.4, 22, d * 0.4, -w / 4, 0, -d / 4, '#e9e2d0', true); gb.box(w * 0.4, 16, d * 0.4, w / 4, 0, d / 4, '#e9e2d0', true); top = 24; }
+        else if (pr.kind === 'skyscraper') { gb.box(w * 0.7, 70, d * 0.7, 0, 0, 0, '#4f86c0', true); gb.box(w * 0.45, 22, d * 0.45, 0, 70, 0, '#6fa8dc', true); gb.cyl(0.4, 0.4, 10, 0, 92, 0, '#ddd'); top = 104; }
         else { gb.box(w * 0.8, 34, d * 0.8, 0, 0, 0, '#6fa0c8', true); top = 36; }
         gb.ring(Math.max(w, d) * 0.72, Math.max(w, d) * 0.78, 0, 0.12, 0, '#5b9be0');
         lbl = label(`${K.icon} ${K.name}`, { bg: 'rgba(47,111,180,.92)', border: '#cfe3ff', font: 26, scale: 0.85 });
@@ -382,12 +383,15 @@ const City3D = (() => {
   // ---------- інфраструктура міста (рівні з city.js) ----------
   let infraMesh = null, infraSig = '';
   function syncInfra(vc) {
-    const sig = typeof infraKey3d === 'function' ? vc + ':' + infraKey3d(vc) : '';
+    const sky = typeof skylineLevel === 'function' ? skylineLevel(vc) : 0;
+    const sig = typeof infraKey3d === 'function' ? vc + ':' + infraKey3d(vc) + ':' + sky : '';
     if (sig === infraSig) return;
     infraSig = sig;
     if (infraMesh) { scene.remove(infraMesh); infraMesh.geometry.dispose(); infraMesh = null; }
     const D = state.cities && state.cities.c[vc]; if (!D) return;
     const L = D.lv, gb = new GB(), R = seeded(777);
+    // ділове середмістя: що вища забудова — то більше й вищих хмарочосів
+    for (let i = 0; i < sky * 2; i++) { const x = 104 + (i % 4) * 13, z = -120 + Math.floor(i / 4) * 14, h = 40 + sky * 8 + R() * 30; gb.box(9, h, 9, x, 0, z, pickR(R, ['#4f86c0', '#6fa8dc', '#3d6c9c', '#9ab7d3']), true); if (h > 80) gb.cyl(0.3, 0.3, 8, x, h, z, '#ddd'); }
     if (L.roads) { // кільцева магістраль
       for (const z of [-140]) gb.box(300, 0.05, 7, 0, 0.02, z, '#2b2f36');
       for (const x of [-150, 150]) gb.box(7, 0.05, 250, x, 0.02, -15, '#2b2f36');

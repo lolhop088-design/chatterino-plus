@@ -262,11 +262,13 @@ const PROP_KINDS = {
   mall: { name: 'Торговий центр', icon: '🛍️', yield: 0.095 },
   complex: { name: 'Житловий комплекс', icon: '🏘️', yield: 0.075 },
   bizcenter: { name: 'Бізнес-центр', icon: '🏙️', yield: 0.085 },
+  skyscraper: { name: 'Хмарочос', icon: '🌆', yield: 0.1 },
 };
 const CONSTRUCT = {
   complex: { name: 'Житловий комплекс', cost: 650000, days: 40, sizes: ['L', 'XL'] },
   mall: { name: 'Торговий центр', cost: 900000, days: 45, sizes: ['L', 'XL'] },
   bizcenter: { name: 'Бізнес-центр', cost: 1100000, days: 50, sizes: ['L', 'XL'] },
+  skyscraper: { name: 'Хмарочос', cost: 4500000, days: 120, sizes: ['XL'], dists: ['biz', 'center', 'river'] },
 };
 
 // ================= Особисте життя =================

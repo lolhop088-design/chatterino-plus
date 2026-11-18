@@ -23,7 +23,7 @@ const DIRECTIVES = {
 
 function hqState() {
   if (!state.hq) state.hq = { founded: false, on: {}, log: [], last: {}, opts: {} };
-  state.hq.opts = Object.assign({ expansionBudget: 0.1, maBudget: 0.25, retailMode: 'market', repairAt: 70, maxLevel: 3, prodSwitch: true, ads: true, interior: true, reserve: 0, shareCap: 1, expandType: 'all', expandCity: 'all', expandEvery: 3, autoLoan: false, repayMult: 3, wagePolicy: 1, moraleAt: 45, maSector: 'own' }, state.hq.opts);
+  state.hq.opts = Object.assign({ expansionBudget: 0.1, maBudget: 0.25, retailMode: 'market', repairAt: 70, maxLevel: 3, prodSwitch: true, ads: true, interior: true, reserve: 0, shareCap: 1, expandType: 'all', expandCity: 'all', expandEvery: 3, autoLoan: false, repayMult: 3, wagePolicy: 1, moraleAt: 45, maSector: 'own', hrAgency: false }, state.hq.opts);
   if (!state.hq.stats) state.hq.stats = {};
   return state.hq;
 }

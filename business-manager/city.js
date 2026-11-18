@@ -52,7 +52,8 @@ function projectCost(cid, k, by = 'player') {
   const D = cdev(cid), lvl = D.lv[k] + 1;
   let c = INFRA[k].cost * lvl * CITIES[cid].price * state.econ.priceLevel;
   if (by === 'player') {
-    if (typeof cityControl === 'function' && cityControl(cid)) c *= 0.8; // мер — співфінансування з міського бюджету
+    if (typeof cityControl === 'function' && cityControl(cid)) c *= 0.8;
+    if (typeof mayorDiscount === 'function') c *= mayorDiscount(cid); // мер — співфінансування з міського бюджету
     if (state.corp && state.corp.divs.some((d) => d.ind === 'construction' && d.city === cid)) c *= 0.9; // власна будівельна компанія
   }
   return Math.round(c);

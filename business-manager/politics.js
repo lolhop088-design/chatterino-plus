@@ -217,7 +217,7 @@ function lobbyMeeting(ministry) {
   const cost = 1e5 * priceLvl(); if (state.cash < cost) return toast('Недостатньо коштів.', 'bad');
   book('politics', -cost); P.me.meetings++;
   P.lobby[ministry] = (P.lobby[ministry] || 0) + 1;
-  const ok = chance(0.25 + (P.coalition.includes(P.me.party) ? 0.2 : 0) + P.me.pc / 400);
+  const ok = chance(0.25 + (P.coalition.includes(P.me.party) ? 0.2 : 0) + P.me.pc / 400 + (typeof relOf === 'function' ? (relOf(ministry) - 50) / 200 : 0));
   if (ok && ministry === 'economy') { const t = pick(Object.keys(SUBSIDY_TARGETS)); G.subsidies.push({ target: t, rate: 0.15, until: state.day + 60 }); govDecide(`Після консультацій з бізнесом Мінекономіки запускає програму для галузі «${SUBSIDY_TARGETS[t].name}».`, 'good'); }
   else if (ok && ministry === 'tax') { m.strict = Math.max(0.1, +(m.strict - 0.05).toFixed(2)); govDecide('Податкова спрощує процедури перевірок після консультацій з бізнесом.', 'good'); }
   else if (ok) { m.strict = Math.max(0.1, +(m.strict - 0.04).toFixed(2)); govDecide(`${MINISTRIES[ministry].name} пом’якшує регулювання після публічних консультацій.`, 'good'); }
@@ -358,7 +358,7 @@ function voteBill(b) {
     if (p.player) s = b.by === 'player' ? 1 : s;
     else if (b.by === 'player') s += Math.min(0.25, (P.lobby[p.id] || 0) * 0.03); // законний лобізм (зареєстровані внески)
     if (b.party && P.coalition.includes(p.id)) s += P.coalition.includes(b.party) ? 0.08 : -0.12;
-    yes += p.seats * clamp(s + rnd(-0.1, 0.1), 0, 1);
+    yes += p.seats * clamp(s + rnd(-0.1, 0.1) + (typeof opinionBias === 'function' ? opinionBias(b.key) : 0), 0, 1);
   }
   let passed = yes > SEATS / 2;
   // Вето президента
