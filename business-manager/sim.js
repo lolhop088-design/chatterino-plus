@@ -31,7 +31,7 @@ function newGame(o = {}) {
     depts: { hr: 0, accounting: 0, legal: 0, rnd: 0, marketing: 0, sales: 0 },
     tech: { points: 0, retail: 0, industry: 0, auto: 0, it: 0 },
     led: {}, ledger: [], invPrev: 0, history: [], log: [], news: [], achievements: {}, flags: {}, over: false, negDays: 0,
-    ui: { view: 'empire', bizId: null, facId: null, tab: 'overview', lot: null },
+    ui: { view: 'home', bizId: null, facId: null, tab: 'overview', lot: null },
   };
   for (const g of Object.keys(GOODS)) state.market[g] = { mult: rnd(0.9, 1.1) };
   genCompanies();
@@ -186,7 +186,7 @@ function competitors(b) {
   return s * modMult('pricewar', b.type);
 }
 function trafficMult(districtId, type, C = city()) {
-  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
+  let m = (typeof sponsorTraffic === 'function' ? sponsorTraffic() : 1) * (typeof prTraffic === 'function' ? prTraffic() : 1) * (typeof crimeTraffic === 'function' ? crimeTraffic(C) : 1) * modMult('traffic', districtId) * modMult('traffic', '*') * modMult('demand', type) * C.traffic * state.econ.demand * (1 + 0.03 * state.depts.marketing);
   if (typeof cityMult === 'function' && typeof cityIdOf === 'function') { const cid = cityIdOf(C); m *= cityMult(cid, 'traffic'); if (districtId === 'center' || districtId === 'river') m *= cityMult(cid, 'tourism'); }
   if (C.tourism && (districtId === 'center' || districtId === 'river')) m *= C.tourism;
   const wd = weekday();
@@ -1016,6 +1016,7 @@ function migrateState() {
   if (typeof lifeState === 'function') lifeState();
   if (typeof clubsState === 'function') clubsState();
   if (typeof groupState === 'function') groupState();
+  if (typeof liveState === 'function') liveState();
   if (typeof hqState === 'function') hqState();
 }
 

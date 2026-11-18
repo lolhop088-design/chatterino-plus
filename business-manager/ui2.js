@@ -21,7 +21,7 @@ function termHead(cur) {
 Object.assign(VIEWS, {
   newsroom() {
     const cat = state.ui.newsCat2 || 'all';
-    const cats = { all: 'Усі', econ: 'Економіка', politics: 'Політика', business: 'Бізнес', corp: 'Компанії', market: 'Ринки', media: 'Медіа', crime: 'Кримінал', tech: 'Технології' };
+    const cats = { all: 'Усі', world: 'Події світу', econ: 'Економіка', politics: 'Політика', business: 'Бізнес', corp: 'Компанії', market: 'Ринки', media: 'Медіа', crime: 'Кримінал', tech: 'Технології' };
     const list = state.news.filter((n) => cat === 'all' || n.cat === cat).slice(0, 100);
     return `${termHead('newsroom')}<div class="chips filter">${Object.entries(cats).map(([k, v]) => `<button class="chip ${cat === k ? 'on' : ''}" data-act="newsCat2" data-v="${k}">${v}</button>`).join('')}</div>
       <div class="card"><ul class="log news">${list.map((n) => `<li class="${n.kind} ${n.breaking ? 'breaking' : ''}"><small>Д${n.day}</small> ${n.breaking ? '<b class="brk">BREAKING</b> ' : ''}${esc(n.text)}${n.fake ? ' <span class="tag bad">фейк</span>' : ''}</li>`).join('') || '<li class="muted">Новин немає.</li>'}</ul></div>`;

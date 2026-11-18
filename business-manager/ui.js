@@ -1107,7 +1107,7 @@ if (typeof window !== 'undefined') window.androidBack = function () {
   if (state.ui.view === 'map' && state.ui.lot) { state.ui.lot = null; render(true); return true; }
   if (state.ui.view === 'biz') { state.ui.view = 'businesses'; render(true); return true; }
   if (state.ui.view === 'fac') { state.ui.view = 'industry'; render(true); return true; }
-  if (state.ui.view !== 'empire') { state.ui.view = 'empire'; render(true); return true; }
+  if (state.ui.view !== 'home') { state.ui.view = 'home'; render(true); return true; }
   save();
   return false;
 };

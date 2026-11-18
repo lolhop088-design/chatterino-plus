@@ -41,6 +41,27 @@ function mapRoutes() {
   return r;
 }
 
+function empireAlerts() {
+  const L = state.life;
+  const al = [];
+    const K = state.crime, P = state.pol, W = state.war, G = state.gov;
+    if (state.cash < 0) al.push(['bad', '💸 Від’ємний баланс рахунку', 'finance']);
+    if (K && K.demands.length) al.push(['bad', `📞 Вимагання: ${K.demands.length}`, 'underworld']);
+    if (K && K.blackmail) al.push(['bad', '✉️ Шантаж — потрібне рішення', 'underworld']);
+    if (K && K.offers.length) al.push(['', `📦 Сумнівні пропозиції: ${K.offers.length}`, 'underworld']);
+    const myCases = (K ? K.cases.filter((c) => c.target === 'player' && !c.outcome).length : 0) + (P ? P.cases.filter((c) => c.target === 'player' && !c.outcome).length : 0) + (G ? G.cases.filter((c) => c.target === 'player' && c.stage !== 'closed').length : 0) + (W ? W.suits.filter((s) => s.defendant === 'player' && !s.outcome).length : 0);
+    if (myCases) al.push(['bad', `⚖️ Справ і позовів проти вас: ${myCases}`, 'investigations']);
+    if (P && P.campaign && P.campaign.cands.some((c) => c.player)) al.push(['', `🗳️ Ви берете участь у виборах — голосування в день ${P.campaign.ends}`, 'politics']);
+    if (P && P.tenders.length) al.push(['', `📑 Відкриті держтендери: ${P.tenders.length}`, 'politics']);
+    if (state.corp && state.corp.builds.some((b) => b.ready <= state.day)) al.push(['good', '🛰️ Супутник готовий до запуску', 'divisions']);
+    if (state.sci && !state.sci.active && Object.keys(TECHS).some(techAvail)) al.push(['', '🔬 Можна почати нове дослідження', 'science']);
+    if (L && L.health < 40) al.push(['bad', `❤️ Здоров’я ${Math.round(L.health)} — варто подбати про себе`, 'personal']);
+    if (L && L.stress > 70) al.push(['bad', `😰 Стрес ${Math.round(L.stress)} — візьміть відпустку`, 'personal']);
+    if (L && L.age > 55 && !L.will) al.push(['', '📜 Складіть заповіт', 'personal']);
+    if (state.media && state.media.campaigns.some((c) => c.target === 'player' && c.by !== 'player')) al.push(['bad', '🗯️ Проти вас іде медіакампанія', 'media']);
+  return al;
+}
+
 Object.assign(VIEWS, {
   globe() {
     const layer = state.ui.mapLayer || 'business', zoom = state.ui.mapZoom || 'world', sel = state.ui.globeCity;
@@ -87,22 +108,7 @@ Object.assign(VIEWS, {
     const seg = [['Роздріб', last.sales], ['B2B і заводи', last.b2b], ['IT', last.software], ['Галузі', last.divRev], ['Медіа', last.media], ['Спорт', last.sportInc], ['Банк', last.bankProfit], ['Концесії', last.infraRev], ['Оренда', last.rentInc], ['Електроенергія', last.power]].filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1]);
     const segMax = Math.max(1, ...seg.map((x) => x[1]));
     // тривоги
-    const al = [];
-    const K = state.crime, P = state.pol, W = state.war, G = state.gov;
-    if (state.cash < 0) al.push(['bad', '💸 Від’ємний баланс рахунку', 'finance']);
-    if (K && K.demands.length) al.push(['bad', `📞 Вимагання: ${K.demands.length}`, 'underworld']);
-    if (K && K.blackmail) al.push(['bad', '✉️ Шантаж — потрібне рішення', 'underworld']);
-    if (K && K.offers.length) al.push(['', `📦 Сумнівні пропозиції: ${K.offers.length}`, 'underworld']);
-    const myCases = (K ? K.cases.filter((c) => c.target === 'player' && !c.outcome).length : 0) + (P ? P.cases.filter((c) => c.target === 'player' && !c.outcome).length : 0) + (G ? G.cases.filter((c) => c.target === 'player' && c.stage !== 'closed').length : 0) + (W ? W.suits.filter((s) => s.defendant === 'player' && !s.outcome).length : 0);
-    if (myCases) al.push(['bad', `⚖️ Справ і позовів проти вас: ${myCases}`, 'investigations']);
-    if (P && P.campaign && P.campaign.cands.some((c) => c.player)) al.push(['', `🗳️ Ви берете участь у виборах — голосування в день ${P.campaign.ends}`, 'politics']);
-    if (P && P.tenders.length) al.push(['', `📑 Відкриті держтендери: ${P.tenders.length}`, 'politics']);
-    if (state.corp && state.corp.builds.some((b) => b.ready <= state.day)) al.push(['good', '🛰️ Супутник готовий до запуску', 'divisions']);
-    if (state.sci && !state.sci.active && Object.keys(TECHS).some(techAvail)) al.push(['', '🔬 Можна почати нове дослідження', 'science']);
-    if (L && L.health < 40) al.push(['bad', `❤️ Здоров’я ${Math.round(L.health)} — варто подбати про себе`, 'personal']);
-    if (L && L.stress > 70) al.push(['bad', `😰 Стрес ${Math.round(L.stress)} — візьміть відпустку`, 'personal']);
-    if (L && L.age > 55 && !L.will) al.push(['', '📜 Складіть заповіт', 'personal']);
-    if (state.media && state.media.campaigns.some((c) => c.target === 'player' && c.by !== 'player')) al.push(['bad', '🗯️ Проти вас іде медіакампанія', 'media']);
+    const al = empireAlerts();
     const groups = typeof NAV_GROUPS !== 'undefined' ? NAV_GROUPS : [];
     const byId = Object.fromEntries(NAV.map((x) => [x[0], x]));
     return `<div class="hero"><div class="hero-l">${avatarSVG(state.me.look, 56)}<div><small>${esc(state.company)}${L ? ` · ${typeof statusTitle === 'function' ? statusTitle() : ''} · покоління ${L.gen}` : ''}</small><h1>${moneyK(nw)}</h1><span class="${ch >= 0 ? 'up' : 'down'}">${ch >= 0 ? '▲' : '▼'} ${pct(Math.abs(ch), 1)} за 30 днів</span></div></div>

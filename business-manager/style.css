@@ -347,3 +347,44 @@ h1 { letter-spacing: .2px; }
 @media (prefers-reduced-motion: reduce) { .globe .route { animation: none; } .tiles button { transition: none; } }
 .gscroll { overflow-x: auto; border-radius: 10px; -webkit-overflow-scrolling: touch; }
 @media (max-width: 700px) { .gscroll.world svg { min-width: 900px; max-height: none; } }
+
+/* ===== Головна (дизайн гравця) ===== */
+.home { max-width: 760px; margin: 0 auto; }
+.hhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.hlogo { display: flex; align-items: center; gap: 10px; font-size: 40px; line-height: 1; }
+.hlogo b { display: block; font-size: 26px; color: var(--text); letter-spacing: .2px; } .hlogo small { display: block; font-size: 13px; color: var(--muted); }
+.hicons { display: flex; gap: 8px; }
+.hicons button { position: relative; width: 48px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); font-size: 22px; cursor: pointer; box-shadow: 0 2px 6px rgba(15, 26, 46, .06); }
+.hicons i { position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; background: #e53935; color: #fff; font: 700 11px/20px system-ui; font-style: normal; padding: 0 5px; }
+.hprofile { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; color: #fff; cursor: pointer; margin-bottom: 12px;
+  background: linear-gradient(135deg, #1b2a44 0%, #0f1a2e 100%); box-shadow: 0 8px 20px rgba(15, 26, 46, .25); }
+.hav { width: 68px; height: 68px; border-radius: 50%; background: #e9eef5; display: grid; place-items: center; overflow: hidden; border: 2px solid #c9d3e2; flex: none; }
+.hpinfo { flex: 1; min-width: 0; position: relative; }
+.hpinfo b { display: block; font-size: 17px; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hpinfo small { color: #b9c4d8; }
+.hxp { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, .15); overflow: hidden; margin-top: 6px; } .hxp i { display: block; height: 100%; background: linear-gradient(90deg, #f0b429, #ffd66b); border-radius: 4px; }
+.hxpp { position: absolute; right: 0; bottom: -2px; font-size: 11px; }
+.hmoney { display: flex; flex-direction: column; gap: 6px; padding-left: 12px; border-left: 1px solid rgba(255, 255, 255, .15); }
+.hmoney div { display: grid; grid-template-columns: 26px auto; column-gap: 6px; align-items: center; }
+.hmoney span { grid-row: span 2; font-size: 22px; } .hmoney b { font-size: 16px; } .hmoney small { font-size: 11px; }
+.hmoney .up, .hprofile .up { color: #4fd18b; } .hmoney .down { color: #ff7a6e; }
+.hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.hcat { position: relative; height: 150px; border: 0; border-radius: 18px; overflow: hidden; padding: 0; cursor: pointer; text-align: left; color: #fff; box-shadow: 0 6px 16px rgba(15, 26, 46, .18); transition: transform .12s; }
+.hcat:active { transform: scale(.98); }
+.hcat svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hshade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5, 12, 28, 0) 25%, rgba(5, 12, 28, .82) 100%); }
+.htxt { position: absolute; left: 12px; right: 30px; bottom: 10px; }
+.htxt b { display: block; font-size: 19px; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); } .htxt b span { margin-right: 2px; }
+.htxt small { display: block; font-size: 12.5px; line-height: 1.3; color: #e6ecf5; margin-top: 2px; }
+.hchev { position: absolute; right: 10px; bottom: 14px; font-size: 26px; line-height: 1; }
+.hstock { cursor: pointer; } .hspark { width: 100%; height: 80px; display: block; margin: 6px 0; color: var(--text); }
+.hrng { display: flex; justify-content: space-between; gap: 4px; }
+.hrng button { flex: 1; border: 0; border-radius: 10px; padding: 6px 0; background: var(--panel2); color: var(--text); cursor: pointer; font-size: 13px; }
+.hrng button.on { background: #2f6fd6; color: #fff; font-weight: 600; }
+.hrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hmini { display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; color: var(--text); font: inherit; border: 1px solid var(--line); position: relative; }
+.hmini div { flex: 1; min-width: 0; } .hmini small { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hmini .hxp { background: var(--line); } .hchev2 { color: #2f6fd6; font-size: 24px; }
+.hbadge { display: inline-block; min-width: 18px; height: 18px; border-radius: 9px; background: #e53935; color: #fff; font: 700 11px/18px system-ui; font-style: normal; text-align: center; padding: 0 4px; }
+.hevent { border-left: 4px solid var(--accent); } .hevent.bad { border-left-color: var(--bad); } .hevent.good { border-left-color: var(--good); }
+.hevent p { margin: 4px 0; }
+@media (max-width: 420px) { .hcat { height: 132px; } .htxt b { font-size: 17px; } .hmoney b { font-size: 14px; } .hav { width: 56px; height: 56px; } .hlogo b { font-size: 22px; } .hicons button { width: 42px; height: 40px; } }
