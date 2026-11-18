@@ -1401,6 +1401,7 @@ const ACHIEVEMENTS = [
   { id: 'mogul', icon: '📡', name: 'Медіамагнат', desc: 'Володійте 3 медіа', check: (s) => !!(s.media && s.media.outlets.filter((o) => o.owner === 'player').length >= 3) },
   { id: 'party', icon: '🗳️', name: 'Політик', desc: 'Заснуйте власну партію', check: (s) => !!(s.pol && s.pol.me.party) },
   { id: 'mayor', icon: '🏙️', name: 'Мер', desc: 'Виграйте вибори мера', check: (s) => !!(s.pol && s.pol.me.posts.some((p) => p.startsWith('mayor:'))) },
+  { id: 'kingmaker', icon: '♟️', name: 'Сірий кардинал', desc: 'Ваша людина стала президентом', check: (s) => !!(s.pol && s.pol.president && s.pol.president.ally) },
   { id: 'president', icon: '🎖️', name: 'Президент', desc: 'Станьте президентом країни', check: (s) => !!(s.pol && s.pol.me.office === 'president') },
   { id: 'fortress', icon: '🛡️', name: 'Фортеця', desc: 'Цілодобова охорона на всіх об’єктах і елітна особиста охорона', check: (s) => !!(s.crime && s.crime.guard === 3 && [...s.biz, ...s.fac].length >= 3 && [...s.biz, ...s.fac].every((u) => u.sec === 3)) },
   { id: 'conglomerate', icon: '🏢', name: 'Конгломерат', desc: 'Підрозділи в 3 різних галузях', check: (s) => !!(s.corp && new Set(s.corp.divs.map((d) => d.ind)).size >= 3) },

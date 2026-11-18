@@ -91,7 +91,7 @@ function formCoalition() {
   const rest = sorted.slice(1).sort((a, b) => near(lead, a) - near(lead, b) || b.seats - a.seats);
   for (const p of rest) { if (seats > SEATS / 2) break; co.push(p); seats += p.seats; }
   P.coalition = co.map((p) => p.id);
-  P.pm = { name: lead.player ? state.me.name : POLITICIANS[(POLITICIANS.indexOf(lead.leader) + 7) % POLITICIANS.length], party: lead.id, player: !!lead.player, since: state.day };
+  P.pm = { name: lead.player ? (P.me.nominees && P.me.nominees.pm ? P.me.nominees.pm.name : loyalistName()) : POLITICIANS[(POLITICIANS.indexOf(lead.leader) + 7) % POLITICIANS.length], party: lead.id, player: false, ally: !!lead.player, loyalty: lead.player ? 85 : 0, since: state.day };
   appointCabinet();
 }
 /** Уряд призначає профільних міністрів (не незалежні органи). */
@@ -111,8 +111,11 @@ function startCampaign(type, city) {
   const P = polState();
   const cands = [];
   const ps = [...P.parties].sort((a, b) => b.rating - a.rating).slice(0, type === 'parl' ? 99 : 4);
-  for (const p of ps) cands.push({ id: p.id, name: p.player ? state.me.name : p.leader, party: p.id, score: p.rating, spend: 0, player: !!p.player });
-  if (type !== 'parl' && P.me.running && P.me.running.type === type && P.me.running.city === (city || null) && !cands.some((c) => c.player)) cands.push({ id: 'me', name: state.me.name, party: P.me.party, score: P.me.popularity * 0.6, spend: 0, player: true });
+  for (const p of ps) {
+    if (!p.player) { cands.push({ id: p.id, name: p.leader, party: p.id, score: p.rating, spend: 0, player: false }); continue; }
+    if (type === 'parl') { cands.push({ id: p.id, name: state.me.name, party: p.id, score: p.rating, spend: 0, player: true }); continue; }
+  }
+  if (type !== 'parl') { const pc = partyCandidate(type, city); if (pc) cands.push(pc); }
   P.campaign = { type, city: city || null, ends: state.day + 30, cands, debates: 0 };
   polNews(`Стартувала кампанія: ${type === 'pres' ? 'вибори президента' : type === 'parl' ? 'парламентські вибори' : `вибори мера (${CITIES[city].name})`}. Голосування через 30 днів.`, '', true);
 }
@@ -131,16 +134,20 @@ function finishCampaign() {
     P.nextParl = state.day + TERM;
   } else if (C.type === 'pres') {
     const w = res[0];
-    P.president = { name: w.name, party: w.party, since: state.day, player: !!w.player };
-    if (w.player) { P.me.office = 'president'; polNews(`${state.me.name} обраний(-а) президентом з результатом ${w.pct}%!`, 'good', true); }
+    const wc = C.cands.find((c) => c.name === w.name) || {};
+    P.president = { name: w.name, party: w.party, since: state.day, player: !!w.player, ally: !!wc.ally, loyalty: wc.loyalty || 0, skill: wc.skill || 0 };
+    if (w.player) { P.me.office = 'president'; polNews(`${state.me.name} обраний(-а) президентом з результатом ${w.pct}%!`, 'good', true); handOverMayoralties(); }
+    else if (wc.ally) { if (P.me.office === 'president') P.me.office = null; polNews(`Президентом обрано ${w.name} — кандидата партії «${(partyById(w.party) || {}).name}» (${w.pct}%). Ваша людина на найвищій посаді.`, 'good', true); }
     else { if (P.me.office === 'president') P.me.office = null; polNews(`Президентом обрано ${w.name} (${(partyById(w.party) || {}).name || 'позапартійний'}) — ${w.pct}%.`, '', true); }
     P.nextPres = state.day + TERM * 1.5;
   } else {
     const w = res[0];
-    P.mayors[C.city] = { name: w.name, party: w.party, player: !!w.player, since: state.day };
+    const wm = C.cands.find((c) => c.name === w.name) || {};
+    P.mayors[C.city] = { name: w.name, party: w.party, player: !!w.player, ally: !!wm.ally, loyalty: wm.loyalty || 0, since: state.day };
+    if (P.me.nominees && P.me.nominees.mayor) delete P.me.nominees.mayor[C.city];
     if (w.player) P.me.posts = [...new Set([...P.me.posts, 'mayor:' + C.city])];
     else P.me.posts = P.me.posts.filter((x) => x !== 'mayor:' + C.city);
-    polNews(`${CITIES[C.city].name}: новий мер — ${w.name} (${w.pct}%).`, w.player ? 'good' : '');
+    polNews(`${CITIES[C.city].name}: новий мер — ${w.name} (${w.pct}%)${wm.ally ? ' — ваша людина' : ''}.`, w.player || wm.ally ? 'good' : '');
   }
   P.me.running = null;
   if (typeof checkAchievements === 'function') checkAchievements();
@@ -172,7 +179,7 @@ function donate(partyId, amount) {
 }
 function campaignSpend(amount) {
   const P = polState(), C = P.campaign; if (!C) return;
-  const me = C.cands.find((c) => c.player); if (!me) return toast('Ви не берете участі в цих виборах.', 'bad');
+  const me = C.cands.find((c) => c.player) || C.cands.find((c) => c.ally && c.party === P.me.party); if (!me) return toast('Ні ви, ні ваша людина не беруть участі в цих виборах.', 'bad');
   if (state.cash < amount) return toast('Недостатньо коштів.', 'bad');
   book('politics', -amount); me.spend += amount;
   // медіаресурс посилює кампанію
@@ -182,13 +189,16 @@ function campaignSpend(amount) {
 function runFor(type, city) {
   const P = polState();
   if (!P.me.party && type !== 'mayor') return toast('Для виборів президента потрібна партія (своя або підтримка).', 'bad');
+  if (type === 'mayor' && P.me.office === 'president') return toast('Президент не може одночасно бути мером. Висуньте свою людину.', 'bad');
+  if (type === 'mayor' && P.me.posts.includes('mayor:' + city)) return toast('Ви вже мер цього міста.', 'bad');
   if (P.me.popularity < (type === 'pres' ? 25 : 10)) return toast(`Замала популярність (потрібно ${type === 'pres' ? 25 : 10}).`, 'bad');
   const fee = (type === 'pres' ? 2e6 : 2e5) * priceLvl();
   if (state.cash < fee) return toast(`Застава кандидата: ${moneyK(fee)}.`, 'bad');
   book('politics', -fee);
   P.me.running = { type, city: city || null };
+  if (P.me.nominees) { if (type === 'pres') P.me.nominees.pres = null; else if (P.me.nominees.mayor) delete P.me.nominees.mayor[city]; }
   const C = P.campaign;
-  if (C && C.type === type && C.city === (city || null) && !C.cands.some((c) => c.player)) C.cands.push({ id: 'me', name: state.me.name, party: P.me.party, score: P.me.popularity * 0.6, spend: 0, player: true });
+  if (C && C.type === type && C.city === (city || null) && !C.cands.some((c) => c.player)) C.cands = C.cands.filter((c) => !(c.ally && c.party === P.me.party)), C.cands.push({ id: 'me', name: state.me.name, party: P.me.party, score: P.me.popularity * 0.6, spend: 0, player: true });
   polNews(`${state.me.name} висуває свою кандидатуру: ${type === 'pres' ? 'президент' : `мер (${CITIES[city].name})`}.`);
 }
 function debate() {
@@ -217,7 +227,7 @@ function lobbyMeeting(ministry) {
 function proposeBill(key) {
   const P = polState(), mp = myParty();
   const sponsorParty = mp && mp.seats > 0 ? mp : P.parties.filter((p) => (P.lobby[p.id] || 0) >= 1 && p.seats > 0).sort((a, b) => (P.lobby[b.id] || 0) - (P.lobby[a.id] || 0))[0];
-  if (!sponsorParty && P.me.office !== 'president') return toast('Потрібні власні депутати або партія, яку ви офіційно підтримуєте (внесок ≥ $1M).', 'bad');
+  if (!sponsorParty && !presControl()) return toast('Потрібні власні депутати або партія, яку ви офіційно підтримуєте (внесок ≥ $1M).', 'bad');
   if (P.bills.some((b) => b.key === key && !b.status)) return toast('Такий законопроєкт уже розглядається.', 'bad');
   const cost = 3e5 * priceLvl(); if (state.cash < cost) return toast('Недостатньо коштів.', 'bad');
   book('politics', -cost);
@@ -228,7 +238,7 @@ function proposeBill(key) {
 function nominate(ministry, name, strict) {
   const P = polState();
   if (!CABINET.includes(ministry)) return toast('ЦБ, антимонопольний комітет і суди незалежні — їх формують за конкурсом.', 'bad');
-  const can = P.me.office === 'president' || (myParty() && P.coalition.includes(P.me.party));
+  const can = presControl() || (myParty() && P.coalition.includes(P.me.party));
   if (!can) return toast('Висувати міністрів може лише коаліція або президент.', 'bad');
   if (P.me.pc < 20) return toast('Потрібно 20 політичного капіталу.', 'bad');
   P.me.pc -= 20;
@@ -285,7 +295,7 @@ function polDaily() {
   const staff = state.staff.length;
   const base = 10 + (state.media ? state.media.corpRep * 0.3 : 15) + Math.min(15, staff / 40) + (state.sport ? state.sport.trophies * 2 : 0) + (P.me.office ? 10 : 0);
   P.me.popularity = clamp(P.me.popularity + (base - P.me.popularity) * 0.02, 0, 100);
-  P.me.pc = Math.min(500, P.me.pc + (myParty() ? myParty().seats / 300 : 0) + (P.me.office ? 0.3 : 0) + P.me.posts.length * 0.1);
+  P.me.pc = Math.min(500, P.me.pc + (myParty() ? myParty().seats / 300 : 0) + (P.me.office ? 0.3 : 0) + P.me.posts.length * 0.1 + (P.president && P.president.ally ? 0.25 : 0) + Object.values(P.mayors).filter((m) => m.ally).length * 0.08);
   if (state.day % 30 === 0) P.me.monthDonated = 0;
   // ІІ-компанії фінансують близькі партії (за тими ж лімітами)
   for (const co of aliveCos()) {
@@ -336,7 +346,8 @@ function polDaily() {
   // Антикорупційні справи
   for (const c of P.cases) if (!c.outcome && c.decide <= state.day) decideCorruption(c);
   // Мер-гравець: місто розвивається (поліція, інвестиції)
-  for (const [c, m] of Object.entries(P.mayors)) if (m.player && state.crime) state.crime.police[c] = Math.min(0.95, state.crime.police[c] + 0.0008);
+  allyDaily();
+  for (const [c, m] of Object.entries(P.mayors)) if ((m.player || m.ally) && state.crime) state.crime.police[c] = Math.min(0.95, state.crime.police[c] + 0.0008);
 }
 function voteBill(b) {
   const P = polState(), B = BILLS[b.key];
@@ -351,7 +362,7 @@ function voteBill(b) {
   }
   let passed = yes > SEATS / 2;
   // Вето президента
-  if (passed && P.president && !P.president.player) { const pp = partyById(P.president.party); if (pp && B.ideo[pp.ideo] < 0.25 && chance(0.6)) { passed = false; b.status = 'vetoed'; polNews(`Президент ветував закон «${B.name}».`, '', true); return; } }
+  if (passed && P.president && !P.president.player && !(P.president.ally && b.by === 'player')) { const pp = partyById(P.president.party); if (pp && B.ideo[pp.ideo] < 0.25 && chance(0.6)) { passed = false; b.status = 'vetoed'; polNews(`Президент ветував закон «${B.name}».`, '', true); return; } }
   b.status = passed ? 'passed' : 'failed'; b.yes = Math.round(yes);
   if (passed) { B.apply(); polNews(`Парламент ухвалив закон «${B.name}» (${Math.round(yes)} голосів «за»).`, b.by === 'player' ? 'good' : '', true); if (b.by === 'player') polState().me.pc += 5; }
   else polNews(`Законопроєкт «${B.name}» провалено (${Math.round(yes)} «за»).`, b.by === 'player' ? 'bad' : '');
@@ -373,11 +384,86 @@ function settleTender(t) {
     P.contracts.push({ title: t.title, daily: profit / days, left: days });
     log(`📑 Ви виграли тендер «${t.title}»: ${moneyK(t.value * w.pct)}, очікуваний прибуток ${moneyK(profit)} за 30 днів.`, 'good');
     // Конфлікт інтересів: власна партія в уряді або посада
-    const conflict = P.me.office || (P.me.party && P.coalition.includes(P.me.party)) || (P.appointees[t.ministry]);
+    const conflict = P.me.office || presControl() || (P.me.party && P.coalition.includes(P.me.party)) || (P.appointees[t.ministry]);
     if (conflict && chance(P.laws.declarations ? 0.35 : 0.15)) openCorruptionCase('player', `можливий конфлікт інтересів у тендері «${t.title}»`, t.value * 0.3);
   } else {
     const co = coById(w.by); if (co) { co.cash += t.value * (w.pct - 0.8); if (co.party && P.coalition.includes(co.party) && (partyById(co.party).donors[co.id] || 0) > 2e6 && chance(0.15)) openCorruptionCase(co.id, `тендер «${t.title}» і фінансування правлячої партії`, t.value * 0.3); }
     if (t.bids.some((b) => b.by === 'player')) log(`📑 Тендер «${t.title}» виграла «${(co || {}).name}».${canPlayer ? '' : ' (у вас немає потрібного профілю)'}`);
+  }
+}
+
+// ---------- Свої люди на посадах ----------
+const loyalistName = () => `${pick(FIRST)} ${pick(LAST)}`;
+function makeLoyalist() { return { name: loyalistName(), skill: ri(1, 5), loyalty: ri(60, 95) }; }
+function polBench() { const P = polState(); if (!P.me.bench || !P.me.bench.length) P.me.bench = Array.from({ length: 3 }, makeLoyalist); if (!P.me.nominees) P.me.nominees = { pres: null, mayor: {}, pm: null }; return P.me.bench; }
+const presControl = () => { const P = state.pol; return !!(P && P.president && (P.president.player || P.president.ally)); };
+const cityControl = (c) => { const m = state.pol && state.pol.mayors[c]; return !!(m && (m.player || m.ally)); };
+/** Кандидат вашої партії: ви (якщо зареєструвались), ваша людина або (на президентських) висуванець партії. */
+function partyCandidate(type, city) {
+  const P = polState(); if (!P.me.party && !(P.me.running && P.me.running.type === type)) return null;
+  polBench();
+  const p = myParty(), base = p ? p.rating : 2;
+  if (P.me.running && P.me.running.type === type && P.me.running.city === (city || null)) return { id: 'me', name: state.me.name, party: P.me.party, score: Math.max(base, P.me.popularity * 0.6), spend: 0, player: true };
+  const n = type === 'pres' ? P.me.nominees.pres : P.me.nominees.mayor[city];
+  if (n) return { id: 'ally', name: n.name, party: P.me.party, score: base * (0.85 + n.skill * 0.06) + (type === 'mayor' ? 4 : 0), spend: 0, player: false, ally: true, loyalty: n.loyalty, skill: n.skill };
+  if (type === 'pres' && p) { const g = makeLoyalist(); return { id: 'ally', name: g.name, party: p.id, score: base * 0.9, spend: 0, player: false, ally: true, loyalty: g.loyalty, skill: g.skill }; }
+  return null;
+}
+function setNominee(type, city, idx) {
+  const P = polState(), b = polBench()[idx]; if (!b) return;
+  if (!P.me.party) return toast('Спершу заснуйте партію.', 'bad');
+  if (P.me.pc < 5) return toast('Потрібно 5 політичного капіталу.', 'bad');
+  P.me.pc -= 5;
+  if (type === 'pres') P.me.nominees.pres = b; else if (type === 'pm') P.me.nominees.pm = b; else P.me.nominees.mayor[city] = b;
+  P.me.bench = P.me.bench.filter((x) => x !== b);
+  if (P.me.running && P.me.running.type === type && (type === 'pres' || P.me.running.city === city)) P.me.running = null;
+  const C = P.campaign;
+  if (C && C.type === type && (type === 'pres' || C.city === city)) { C.cands = C.cands.filter((c) => !(c.party === P.me.party && (c.ally || c.player))); const pc = partyCandidate(type, city); if (pc) C.cands.push(pc); }
+  polNews(`Партія «${myParty().name}» висуває ${b.name} ${type === 'pres' ? 'кандидатом у президенти' : type === 'pm' ? 'на посаду прем’єра' : `кандидатом у мери (${CITIES[city].name})`}.`);
+}
+function refreshBench() { const P = polState(); if (P.me.pc < 3) return toast('Потрібно 3 політичного капіталу.', 'bad'); P.me.pc -= 3; P.me.bench = Array.from({ length: 3 }, makeLoyalist); }
+/** Президент не може бути мером: міста передаються заступникам — вашим людям. */
+function handOverMayoralties() {
+  const P = polState();
+  for (const post of P.me.posts.filter((x) => x.startsWith('mayor:'))) {
+    const c = post.split(':')[1], d = makeLoyalist();
+    P.mayors[c] = { name: d.name, party: P.me.party, player: false, ally: true, loyalty: 90, since: state.day };
+    polNews(`${CITIES[c].name}: ${state.me.name} складає повноваження мера; обов’язки переходять заступнику ${d.name}.`);
+  }
+  P.me.posts = P.me.posts.filter((x) => !x.startsWith('mayor:'));
+}
+function resignPresidency() {
+  const P = polState(); if (P.me.office !== 'president') return;
+  const n = P.me.nominees && P.me.nominees.pres ? P.me.nominees.pres : makeLoyalist();
+  P.president = { name: n.name, party: P.me.party, since: state.day, player: false, ally: true, loyalty: Math.max(75, n.loyalty), skill: n.skill };
+  P.me.office = null; P.me.popularity = Math.max(0, P.me.popularity - 5);
+  if (P.me.nominees) P.me.nominees.pres = null;
+  polNews(`${state.me.name} іде у відставку з посади президента. Повноваження переходять ${n.name} (партія «${(myParty() || {}).name || ''}»).`, '', true);
+}
+function resignMayor(c) {
+  const P = polState(); if (!P.me.posts.includes('mayor:' + c)) return;
+  const d = makeLoyalist();
+  P.mayors[c] = { name: d.name, party: P.me.party, player: false, ally: true, loyalty: 85, since: state.day };
+  P.me.posts = P.me.posts.filter((x) => x !== 'mayor:' + c);
+  polNews(`${CITIES[c].name}: ${state.me.name} складає повноваження мера, обов’язки — у заступника ${d.name}.`);
+}
+function supportAlly(kind, c) {
+  const P = polState(), h = kind === 'pres' ? P.president : kind === 'pm' ? P.pm : P.mayors[c]; if (!h || !h.ally) return;
+  if (P.me.pc < 5) return toast('Потрібно 5 політичного капіталу.', 'bad');
+  P.me.pc -= 5; h.loyalty = Math.min(100, (h.loyalty || 50) + 12);
+  log(`🤝 Ви підтримали ${h.name}: лояльність ${Math.round(h.loyalty)}.`);
+}
+/** Лояльність ваших людей: падає при скандалах і низькій популярності, може закінчитись розривом. */
+function allyDaily() {
+  const P = polState(); polBench();
+  if (P.me.office === 'president' && P.me.posts.some((x) => x.startsWith('mayor:'))) handOverMayoralties(); // старі збереження
+  if (state.day % 30 === 0) P.me.bench = Array.from({ length: 3 }, makeLoyalist);
+  const holders = [['pres', P.president], ['pm', P.pm], ...Object.entries(P.mayors).map(([c, m]) => [c, m])];
+  for (const [k, h] of holders) {
+    if (!h || !h.ally) continue;
+    const scandal = P.cases.some((c) => c.target === 'player' && !c.outcome) ? 0.05 : 0;
+    h.loyalty = clamp((h.loyalty || 60) + (P.me.popularity - 30) * 0.002 - scandal + (myParty() && myParty().rating > 15 ? 0.02 : -0.01), 0, 100);
+    if (h.loyalty < 20 && chance(0.01)) { h.ally = false; polNews(`${h.name} (${k === 'pres' ? 'президент' : k === 'pm' ? 'прем’єр' : 'мер ' + CITIES[k].name}) дистанціюється від ${state.me.name} і діє самостійно.`, 'bad', true); }
   }
 }
 

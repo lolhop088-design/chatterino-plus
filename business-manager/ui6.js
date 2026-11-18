@@ -26,7 +26,7 @@ function cityLayerInfo(cid, layer) {
   const D = state.cities && state.cities.c[cid];
   if (layer === 'business') return { color: units ? '#2e9a5a' : unl ? '#3f7fc4' : '#8e96aa', r: 5 + Math.min(12, Math.sqrt(units) * 3), val: units ? `${units} об’єктів` : unl ? 'ринок відкрито' : 'закрито' };
   if (layer === 'economy') { const a = D ? D.attract : 50; return { color: a > 65 ? '#2e9a5a' : a > 45 ? '#d39b22' : '#d2463c', r: 4 + Math.sqrt(D ? D.pop : 1) * 2.4, val: `${D ? D.pop.toFixed(1) : '?'} млн · прив. ${Math.round(a)}` }; }
-  if (layer === 'politics') { const m = state.pol && state.pol.mayors[cid]; const p = m && partyById(m.party); return { color: m && m.player ? '#ffb02e' : p ? IDEOLOGIES[p.ideo].color : '#8e96aa', r: 8, val: m ? `мер ${m.player ? '— ви' : m.name}` : '' }; }
+  if (layer === 'politics') { const m = state.pol && state.pol.mayors[cid]; const p = m && partyById(m.party); return { color: m && (m.player || m.ally) ? '#ffb02e' : p ? IDEOLOGIES[p.ideo].color : '#8e96aa', r: 8, val: m ? `мер ${m.player ? '— ви' : m.name + (m.ally ? ' (ваша людина)' : '')}` : '' }; }
   if (layer === 'info') { const n = state.news.filter((x) => x.text.includes(CITIES[cid].name)).length; return { color: n > 5 ? '#d2463c' : n > 1 ? '#e08a3c' : '#3f7fc4', r: 4 + Math.min(12, n * 1.5), val: `${n} згадок у новинах` }; }
   const ci = state.crime ? crimeIndex(cid) : 0, g = state.crime && strongestGang(cid);
   return { color: ci > 0.4 ? '#d2463c' : ci > 0.2 ? '#e08a3c' : '#2e9a5a', r: 5 + ci * 16, val: `злочинність ${Math.round(ci * 100)}%${g ? ` · ${g.name}` : ''}` };
