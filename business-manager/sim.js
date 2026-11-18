@@ -1017,6 +1017,8 @@ function migrateState() {
   if (typeof clubsState === 'function') clubsState();
   if (typeof groupState === 'function') groupState();
   if (typeof liveState === 'function') liveState();
+  if (typeof finState === 'function') finState();
+  if (typeof corp2State === 'function') corp2State();
   if (typeof hqState === 'function') hqState();
 }
 
@@ -1162,7 +1164,7 @@ function inventoryValue() {
 }
 const fixedAssets = () => sum(state.biz, (b) => b.bookVal) + sum(state.fac, (f) => f.bookVal) + sum(state.carModels, (m) => m.bookVal || 0);
 const propertyValue = () => sum(state.props.filter((p) => p.owned), (p) => (p.building ? p.cost : propValue(p)));
-function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) + (typeof infraValue === 'function' ? infraValue() : 0) + (typeof luxuryValue === 'function' ? luxuryValue() : 0) + (typeof clubsValue === 'function' && state.sport ? clubsValue() : 0) - debt(); }
+function netWorth() { const B = state.bank; return state.cash + inventoryValue() + fixedAssets() + propertyValue() + portfolioValue() + subsidiariesValue() + (B ? B.capital - B.internal : 0) + (typeof venturesValue === 'function' ? venturesValue() : 0) + (typeof divisionsValue === 'function' ? divisionsValue() : 0) + (typeof infraValue === 'function' ? infraValue() : 0) + (typeof luxuryValue === 'function' ? luxuryValue() : 0) + (typeof clubsValue === 'function' && state.sport ? clubsValue() : 0) + (typeof fundsValue === 'function' ? fundsValue() + bondsValue() - bondsDebt() : 0) - debt(); }
 function balance() {
   return { cash: state.cash, inventory: inventoryValue(), fixed: fixedAssets(), property: propertyValue(), shares: portfolioValue(), debt: debt(), equity: netWorth() };
 }
@@ -1361,7 +1363,7 @@ function endOfDay() {
   // банкрутство
   const lim = -diff().bankrupt * priceLvl();
   state.negDays = state.cash < lim ? state.negDays + 1 : 0;
-  if (state.negDays >= 3) gameOver();
+  if (state.negDays >= 3) { if (typeof triggerDefault === 'function' && state.fin && !(state.fin.defaultDay && state.day - state.fin.defaultDay < 120)) triggerDefault(); else gameOver(); }
   else if (state.cash < 0) toast('⚠️ Від’ємний баланс! Скоротіть витрати або візьміть кредит.', 'bad');
   save();
 }

@@ -390,6 +390,8 @@ const LEDGER = {
   sportExp: { name: 'Спортивні клуби (зарплати, трансфери)', kind: 'exp' },
   luxury: { name: 'Утримання розкоші', kind: 'exp' },
   minority: { name: 'Частка міноритаріїв дочірніх', kind: 'exp' },
+  dividendsOut: { name: 'Дивіденди акціонерам', kind: 'exp' },
+  overhead: { name: 'Утримання філій і регіональних офісів', kind: 'exp' },
   family: { name: 'Родина, освіта, медицина', kind: 'exp' },
   charity: { name: 'Благодійність', kind: 'exp' },
   capex: { name: 'Капітальні вкладення', kind: 'cash' },

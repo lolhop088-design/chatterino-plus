@@ -267,8 +267,8 @@ function govDaily() {
   const T = govState().ministries.tax;
   if (chance(0.004 * T.strict * (typeof diff === 'function' ? diff().strict : 1)) && state.ledger.length > 30) {
     const avoid = 1 - 0.15 * state.depts.accounting;
-    if (chance(0.5 * avoid)) { const extra = Math.round(Math.max(0, sum(state.ledger.slice(-30), (x) => x.profit)) * e.taxRate * 0.3); if (extra > 0) { book('tax', -extra); govDecide(`Податкова донарахувала ${state.company} ${moneyK(extra)} за результатами перевірки.`, 'bad'); } }
-    else govDecide(`Податкова перевірка ${state.company} завершилась без порушень.`, 'good');
+    if (chance(0.5 * avoid)) { const extra = Math.round(Math.max(0, sum(state.ledger.slice(-30), (x) => x.profit)) * e.taxRate * 0.3); if (extra > 0) { book('tax', -extra); govDecide(`Податкова донарахувала ${state.company} ${moneyK(extra)} за результатами перевірки.`, 'bad'); if (typeof taxAuditLog === 'function') taxAuditLog('Донараховано податок за результатами перевірки', extra); } }
+    else { govDecide(`Податкова перевірка ${state.company} завершилась без порушень.`, 'good'); if (typeof taxAuditLog === 'function') taxAuditLog('Перевірка без порушень', 0); }
   }
   // Місячні рішення
   if (state.day % 30 === 0) monthlyPolicy();

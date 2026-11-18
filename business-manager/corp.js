@@ -270,7 +270,7 @@ function corpDaily() {
   pharmaDaily(); spaceDaily();
   if (C.holding) {
     const H = HOLDINGS[C.holding]; book('depts', -H.daily * priceLvl());
-    if (C.holding === 'offshore' && chance(0.004) && state.ledger.length > 30) { const extra = Math.round(Math.max(0, sum(state.ledger.slice(-30), (x) => x.profit)) * state.econ.taxRate * 0.15); if (extra > 0) { book('tax', -extra); log(`🧾 Податкова перевірила операції офшорного холдингу: донараховано ${money(extra)}.`, 'bad'); } }
+    if (C.holding === 'offshore' && chance(0.004) && state.ledger.length > 30) { const extra = Math.round(Math.max(0, sum(state.ledger.slice(-30), (x) => x.profit)) * state.econ.taxRate * 0.15); if (extra > 0) { book('tax', -extra); log(`🧾 Податкова перевірила операції офшорного холдингу: донараховано ${money(extra)}.`, 'bad'); if (typeof taxAuditLog === 'function') taxAuditLog('Перевірка офшорного холдингу', extra); } }
   }
   // Катастрофи: вдаряють по страхуванню, готелях, авіа
   C.lossShock = 1 + (C.lossShock - 1) * 0.9;

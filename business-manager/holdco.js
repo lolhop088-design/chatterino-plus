@@ -41,11 +41,11 @@ function subOfUnit(u) {
 function subOfType(type) { if (!state.group) return null; return state.group.subs.find((s) => SEGS[s.seg].types.includes(type)) || null; }
 const subUnits = (s) => [...state.biz.filter((b) => SEGS[s.seg].types.includes(b.type)), ...state.fac.filter((f) => SEGS[s.seg].kinds.includes(f.kind))];
 /** Бонус ефективності юніта від CEO дочірньої компанії. */
-function groupMult(u) { const s = subOfUnit(u); return s && s.ceo ? 1 + 0.015 * s.ceo.skill : 1; }
+function groupMult(u) { const s = subOfUnit(u); if (!s) return 1; return (s.ceo ? 1 + 0.015 * s.ceo.skill : 1) * (0.92 + (s.brand == null ? 50 : s.brand) / 625); }
 
 function makeCEO() {
   const skill = ri(1, 5), style = pick(Object.keys(CEO_STYLES));
-  return { id: 'ceo' + (groupState().seq++), name: `${pick(FIRST)} ${pick(LAST)}`, skill, style, salary: Math.round(500 * Math.pow(skill, 1.35)), look: typeof randLook === 'function' ? randLook() : null };
+  return { id: 'ceo' + (groupState().seq++), name: `${pick(FIRST)} ${pick(LAST)}`, skill, style, salary: Math.round(500 * Math.pow(skill, 1.35)), look: typeof randLook === 'function' ? randLook() : null, honesty: ri(1, 5), loyalty: ri(45, 90), ambition: ri(1, 5), age: ri(32, 62) };
 }
 const ceoSalary = (c) => Math.round(c.salary * wageLvl());
 function refreshCEOs() { const G = groupState(); G.ceoPool = Array.from({ length: 4 }, makeCEO); }
