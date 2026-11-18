@@ -83,3 +83,17 @@ renderNav = function () {
   document.getElementById('nav').innerHTML = items + `<button class="more ${inMore ? 'active' : ''}" data-act="more"><span class="ic">☰</span><span class="lbl">Ще</span></button>`;
 };
 if (typeof NAV_GROUPS !== 'undefined') NAV_GROUPS[0][1].unshift('home');
+
+// ---------- Банери розділів у стилі головної ----------
+const VIEW_CAT = {};
+for (const c of HOME_CATS) for (const v of c.views) if (!VIEW_CAT[v]) VIEW_CAT[v] = c.k;
+Object.assign(VIEW_CAT, { dashboard: 'business', empire: 'economy', personal: 'other', life: 'other', achievements: 'other', settings: 'dev', admin: 'dev', hq: 'business', news: 'other' });
+const NO_BANNER = new Set(['home', 'map', 'biz', 'fac']);
+function decorateView(id, html) {
+  if (NO_BANNER.has(id) || typeof html !== 'string') return html;
+  const i = html.indexOf('<h1>'); if (i < 0 || i > 80) return html;
+  const j = html.indexOf('</h1>', i); if (j < 0) return html;
+  const title = html.slice(i + 4, j), cat = VIEW_CAT[id] || 'business';
+  return html.slice(0, i) + `<div class="vbanner">${ILL[cat]()}<div class="vshade"></div><div class="vtxt"><h1>${title}</h1>${VIEW_DESC[id] ? `<span class="vsub">${VIEW_DESC[id]}</span>` : ''}</div></div>` + html.slice(j + 5);
+}
+for (const id of Object.keys(VIEWS)) { const f = VIEWS[id]; VIEWS[id] = function () { return decorateView(id, f.apply(this, arguments)); }; }
