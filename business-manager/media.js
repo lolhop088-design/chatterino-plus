@@ -65,11 +65,11 @@ function applyReputation(target, impact) {
   const M = mediaState();
   if (target === 'player') {
     M.corpRep = clamp(M.corpRep + impact * 5, 0, 100);
-    if (state.ipo) state.ipo.price *= 1 + impact * 0.03;
+    if (state.ipo) state.ipo.price *= 1 + clamp(impact, -3, 3) * 0.01;
   } else {
     const co = coById(target); if (!co) return;
     co.pr = clamp((co.pr == null ? 50 : co.pr) + impact * 5, 0, 100);
-    co.price = Math.max(0.05, co.price * (1 + impact * 0.04));
+    co.price = Math.max(0.05, co.price * (1 + clamp(impact, -3, 3) * 0.02));
   }
 }
 /** Множник покупців від репутації корпорації гравця (0.85…1.15). */
@@ -120,7 +120,7 @@ function launchCampaign(type, outletId, target, bots) {
   if (state.cash < cost) return toast(`Кампанія коштує ${moneyK(cost)}.`, 'bad');
   if ((type === 'expose' || type === 'smear') && !target) return toast('Оберіть ціль.', 'bad');
   book('marketing', -cost);
-  M.campaigns.push({ id: uid(), by: 'player', via: o.id, type, target: type === 'pr' || type === 'counter' ? 'player' : target, bots: !!bots, fake: C.fake, days: 7, strength: outletPower(o) * (bots ? 1.5 : 1), started: state.day });
+  M.campaigns.push({ id: uid(), by: 'player', via: o.id, type, target: type === 'pr' || type === 'counter' ? 'player' : target, bots: !!bots, fake: C.fake, days: 7, strength: Math.min(4, outletPower(o) * (bots ? 1.5 : 1)), started: state.day });
   log(`${C.icon} Запущено: ${C.name}${target && target !== 'player' ? ` проти «${(coById(target) || {}).name}»` : ''} через «${o.name}».`);
 }
 /** Чи має ціль реальні проблеми (тоді розслідування правдиве й сильне). */
@@ -166,7 +166,7 @@ function mediaDaily() {
     const co = coById(o.owner); if (!co) continue;
     if ((co.rivalry || 0) > 0.55 && chance(0.02)) {
       const type = hasIssues('player') ? 'expose' : chance(0.5) ? 'smear' : 'expose';
-      M.campaigns.push({ id: uid(), by: co.id, via: o.id, type, target: 'player', bots: chance(0.4), fake: type === 'smear', days: 7, strength: outletPower(o), started: state.day });
+      M.campaigns.push({ id: uid(), by: co.id, via: o.id, type, target: 'player', bots: chance(0.4), fake: type === 'smear', days: 7, strength: Math.min(4, outletPower(o)), started: state.day });
       pubNews(`🗯️ «${o.name}» (власник «${co.name}») публікує серію матеріалів проти ${state.company}.`, 'media', 'bad');
     }
   }

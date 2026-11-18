@@ -21,6 +21,9 @@ function money(n, dec = 0) {
 }
 function moneyK(n) {
   const v = Math.abs(n), s = n < 0 ? '−' : '';
+  if (!isFinite(v)) return s + '$∞';
+  if (v >= 1e15) return s + '$' + (v / 1e12).toExponential(2).replace('e+', '·10^') + ' трлн';
+  if (v >= 1e12) return s + '$' + (v / 1e12).toFixed(2) + ' трлн';
   if (v >= 1e9) return s + '$' + (v / 1e9).toFixed(2) + ' млрд';
   if (v >= 1e6) return s + '$' + (v / 1e6).toFixed(2) + ' млн';
   if (v >= 1e4) return s + '$' + (v / 1e3).toFixed(1) + ' тис';

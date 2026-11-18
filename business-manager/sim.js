@@ -1152,6 +1152,7 @@ function ipoDaily() {
   const I = state.ipo, ph = PHASES[state.econ.phase];
   const fair = Math.max(0.1, (netWorth() + Math.max(0, avgProfit()) * 365 * 12 * ph.pe) / I.shares) * (state.media ? 0.8 + 0.4 * state.media.corpRep / 100 : 1);
   I.price = Math.max(0.05, I.price * Math.exp(gauss() * 0.015) + (fair - I.price) * 0.05);
+  I.price = clamp(I.price, fair * 0.3, fair * 3); // ринок не відривається від фундаментальної вартості більш ніж утричі
   I.hist.push(+I.price.toFixed(2)); if (I.hist.length > 120) I.hist.shift();
 }
 
