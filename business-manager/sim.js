@@ -183,7 +183,7 @@ function ensureProducts(b) {
 const fairPrice = (p, b) => p.price * (b ? priceAt(b) : priceLvl());
 function wholesale(b, p) {
   const T = TYPES[b.type];
-  return p.cost * priceAt(b) * modMult('wholesale') * modMult('supplier', b.type) * (T.import ? (state.world ? importFactor(lotCityId(lotOf(b))) : state.econ.fx / 41) : 1) * (p.good && !p.carOnly && state.world ? Math.sqrt(commodFactor(p.good)) : 1);
+  return p.cost * priceAt(b) * modMult('wholesale') * (typeof goalDone === 'function' && goalDone('monopolist') ? 0.97 : 1) * modMult('supplier', b.type) * (T.import ? (state.world ? importFactor(lotCityId(lotOf(b))) : state.econ.fx / 41) : 1) * (p.good && !p.carOnly && state.world ? Math.sqrt(commodFactor(p.good)) : 1);
 }
 function competitors(b) {
   const lot = lotOf(b);
@@ -364,7 +364,7 @@ function whTake(g, qty) {
 const mktPrice = (g) => GOODS[g].price * priceLvl() * state.market[g].mult * (state.world ? commodFactor(g) : 1);
 const sellPrice = (g) => mktPrice(g) * (0.93 + 0.025 * state.depts.sales);
 const buyPrice = (g) => mktPrice(g) * 1.05;
-const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount() * (typeof cityMult === 'function' ? cityMult(state.city, 'transport') : 1) * (typeof jamMult === 'function' ? jamMult(state.city) : 1);
+const transportCost = (g, qty) => GOODS[g].w * qty * 0.012 * priceLvl() * city().transport * transportDiscount() * (typeof cityMult === 'function' ? cityMult(state.city, 'transport') : 1) * (typeof jamMult === 'function' ? jamMult(state.city) : 1) * (typeof goalDone === 'function' && goalDone('globalist') ? 0.9 : 1);
 function marketSell(g, qty, silent) {
   qty = Math.floor(Math.min(qty, whQty(g)));
   if (qty <= 0) return 0;
@@ -455,7 +455,7 @@ function facStaffFactor(f) {
 function facRateFull(f, r) {
   if (!r) return 0;
   const rate = f.kind === 'carplant' ? 5 : r.rate;
-  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry + (typeof sciFx === 'function' ? sciFx('factory') : 0) + (f.kind === 'chipfab' ? (typeof sciFx === 'function' ? sciFx('chipfab') : 0) : 0) + (f.kind === 'powerplant' ? (typeof sciFx === 'function' ? sciFx('power') : 0) : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (typeof groupMult === 'function' ? groupMult(f) : 1) * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'industry') : 1);
+  return rate * ({ S: 0.6, M: 0.8, L: 1, XL: 1.5 }[lotOf(f).size] || 1) * (1 + 0.6 * (f.level - 1)) * (1 + 0.08 * state.tech.industry + (typeof sciFx === 'function' ? sciFx('factory') : 0) + (f.kind === 'chipfab' ? (typeof sciFx === 'function' ? sciFx('chipfab') : 0) : 0) + (f.kind === 'powerplant' ? (typeof sciFx === 'function' ? sciFx('power') : 0) : 0)) * (f.manager ? 1.05 : 1) * absentPenalty(f) * (typeof groupMult === 'function' ? groupMult(f) : 1) * (typeof goalDone === 'function' && goalDone('industrialist') ? 1.05 : 1) * (typeof cityMult === 'function' ? cityMult(lotCityId(lotOf(f)), 'industry') : 1);
 }
 function facValue(f) { return Math.round(f.bookVal * 0.7); }
 function sellFac(f) {
@@ -783,7 +783,7 @@ function staffDaily() {
 }
 
 // ================= Банк =================
-const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12 + (state.difficulty ? diff().rate : 0) + (typeof holdingRate === 'function' ? holdingRate() : 0);
+const creditRate = () => state.econ.rate + 2 + (850 - state.me.credit) / 550 * 12 + (state.difficulty ? diff().rate : 0) + (typeof holdingRate === 'function' ? holdingRate() : 0) - (typeof goalDone === 'function' && goalDone('magnate') ? 0.5 : 0);
 function creditLimit() {
   const assets = state.cash + inventoryValue() + fixedAssets() + sum(state.props.filter((p) => p.owned && !p.mortgage), propValue);
   return Math.max(0, Math.round(Math.max(5000 * priceLvl(), assets * 0.5) * clamp(state.me.credit / 700, 0.4, 1.2) - debt()));
@@ -1034,6 +1034,7 @@ function migrateState() {
   if (typeof laborState === 'function') laborState();
   if (typeof opinionState === 'function') opinionState();
   if (typeof pol2State === 'function') pol2State();
+  if (typeof notifState === 'function') { notifState(); chronState(); if (!state.goals) state.goals = {}; }
   if (typeof corp2State === 'function') corp2State();
   if (typeof hqState === 'function') hqState();
 }

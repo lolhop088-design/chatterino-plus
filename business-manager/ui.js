@@ -2,7 +2,8 @@
 /* БІЗНЕС ІМПЕРІЯ — інтерфейс. */
 
 let timer = null, lastMainRender = 0;
-const SPEEDS = [0, 1000, 400, 120];
+// [інтервал мс, ігрових годин за інтервал] — прискорення = більше годин, тож усе рахується так само, як на ×1
+const SPEEDS = [0, [1000, 1], [500, 1], [200, 1], [200, 2]];
 const isMobile = () => window.matchMedia('(max-width: 760px)').matches;
 
 function setSpeed(v) {
@@ -10,7 +11,7 @@ function setSpeed(v) {
   if (state.over) v = 0;
   state.speed = v;
   clearInterval(timer);
-  if (v > 0) timer = setInterval(() => { try { tick(); } catch (e) { console.error(e); } render(false); }, SPEEDS[v]);
+  if (v > 0) { const [ms, n] = SPEEDS[v]; timer = setInterval(() => { try { for (let i = 0; i < n && state.speed > 0 && !state.over; i++) tick(); } catch (e) { console.error(e); } render(false); }, ms); }
   renderTop();
 }
 function toast(msg, kind = '') {
@@ -47,7 +48,7 @@ const NAV = [
 
 function renderTop() {
   if (!state) return;
-  const sp = ['❚❚', '▶', '▶▶', '▶▶▶'];
+  const sp = ['❚❚', '×1', '×2', '×5', '×10'];
   const ph = PHASES[state.econ.phase];
   document.getElementById('topbar').innerHTML = `
     <button class="brand" data-act="nav" data-v="life">${avatarSVG(state.me.look, 30)}<span><b>${esc(state.company)}</b><small>${esc(state.me.name)} · ${city().name}${Object.keys(state.unlocked || {}).length > 1 ? ` +${Object.keys(state.unlocked).length - 1}` : ''}</small></span></button>

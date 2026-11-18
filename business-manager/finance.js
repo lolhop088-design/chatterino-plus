@@ -60,7 +60,7 @@ function takeLoan2(type, amount) {
 }
 
 // ---------- Облігації ----------
-function bondCoupon(term) { const r = ratingIdx(rating()); return +(state.econ.rate + 0.5 + r * 1.2 + term / 365 * 0.6 + finState().crisis * 3).toFixed(2); }
+function bondCoupon(term) { const r = ratingIdx(rating()); return +(state.econ.rate + 0.5 + r * 1.2 + term / 365 * 0.6 + finState().crisis * 3 - (typeof goalDone === 'function' && goalDone('banker') ? 0.5 : 0)).toFixed(2); }
 function issueBonds(amount, term) {
   const F = finState();
   if (ratingIdx(rating()) >= ratingIdx('CCC')) return toast('З таким рейтингом інвестори облігації не купують.', 'bad');

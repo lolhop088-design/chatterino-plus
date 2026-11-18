@@ -21,7 +21,7 @@ function overheadOf(units) {
 function overheadDaily() {
   const G = groupState();
   let tot = 0;
-  for (const s of G.subs) { const o = overheadOf(subUnits(s)); s.overhead = o.total; tot += o.total; }
+  for (const s of G.subs) { const o = overheadOf(subUnits(s)); s.overhead = o.total * (s.ohMult || 1); tot += s.overhead; }
   const direct = [...state.biz, ...state.fac].filter((u) => !subOfUnit(u));
   const od = overheadOf(direct); tot += od.total;
   corp2State().parentOverhead = od.total;

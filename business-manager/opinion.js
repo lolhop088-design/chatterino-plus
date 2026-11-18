@@ -104,7 +104,7 @@ function opinionDaily() {
   O.scandals = O.scandals.filter((s) => state.day - s.day < 60);
   // Схвалення гравця: медіа, репутація, благодійність, статус, скандали
   const charity = state.life ? Math.min(12, Math.sqrt(state.life.charity / 1e6) * 3) : 0;
-  const target = clamp(30 + (state.media ? state.media.corpRep * 0.3 + state.media.influence * 0.15 : 15) + charity + (I.business > 0 ? I.business * 0.08 : I.business * 0.12) - pen * 4, 0, 100);
+  const target = clamp(30 + (state.media ? state.media.corpRep * 0.3 + state.media.influence * 0.15 : 15) + charity + (I.business > 0 ? I.business * 0.08 : I.business * 0.12) - pen * 4 + (typeof goalDone === 'function' ? (goalDone('mediamogul') ? 5 : 0) + (goalDone('legend') ? 10 : 0) : 0), 0, 100);
   O.approval = clamp(O.approval + (target - O.approval) * 0.03 - pen * 0.3, 0, 100);
   // Медіа впливають на рейтинг гравця: популярність у політиці тяжіє до схвалення
   if (state.pol) state.pol.me.popularity = clamp(state.pol.me.popularity + (O.approval - state.pol.me.popularity) * 0.02, 0, 100);
