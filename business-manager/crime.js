@@ -259,8 +259,8 @@ function crimeDaily() {
   }
   if (K.blackmail && K.blackmail.until <= state.day) answerBlackmail('ignore');
   // Замах/погрози власнику — лише якщо охорона слабка
-  if (chance(0.0004 * crimeIndexAvg() * (1 - guard))) {
-    const loss = Math.round(rnd(0.2, 1) * 1e6 * priceLvl());
+  if (netWorth() > 1e6 * priceLvl() && chance(0.0004 * crimeIndexAvg() * (1 - guard))) { // грабіжники обирають заможних
+    const loss = Math.round(Math.min(rnd(0.2, 1) * 1e6 * priceLvl(), netWorth() * 0.03));
     incident(`⚠️ Напад на автомобіль власника ${state.company}. Обійшлося без жертв, але збитки ${moneyK(loss)}. Подумайте про охорону.`, 'bad', loss);
   }
   // Сірі пропозиції

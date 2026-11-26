@@ -38,6 +38,7 @@ function newGame(o = {}) {
   genLots();
   genProps();
   migrateState();
+  if (o.mode === 'life' && typeof lsInit === 'function') { lsInit(o.age || 18); state.cash = Math.round({ 16: 150, 18: 600, 22: 2500 }[o.age || 18] || 600); state.me.home = (o.age || 18) < 20 ? 'parents' : 'room'; state.ui.view = 'lifehome'; }
   for (let i = 0; i < 10; i++) state.candidates.push(makeCandidate());
   state.invPrev = inventoryValue();
   log(`Ласкаво просимо до міста ${C.name}, ${state.me.name}! На рахунку ${money(state.cash)}.`, 'good');
@@ -153,7 +154,7 @@ function maxStaff(u) {
   if (u.kind === 'office') return { S: 2, M: 8, L: 16, XL: 40 }[lotOf(u).size];
   return Math.ceil(FACILITIES[u.kind].staff * (1 + 0.5 * (u.level - 1)));
 }
-const absentPenalty = (u) => (state.me.job && !u.manager ? 0.9 : 1);
+const absentPenalty = (u) => ((state.me.job || (state.ls && state.ls.on && state.ls.career)) && !u.manager ? 0.9 : 1);
 const managerCost = () => Math.round(140 * wageLvl());
 
 // ================= Роздріб =================
@@ -712,7 +713,8 @@ function personalDaily() {
     me.jobDays++;
     const s = JOBS[me.job].skill; me.skills[s] = Math.min(5, me.skills[s] + 0.02);
   }
-  book('living', -livingCost());
+  if (state.ls && state.ls.on) { const H = HOMES[state.me.home] || HOMES.room; if (!state.me.homeProp && H.rent) book('living', -H.rent * rentLvl()); } // їжа — через заняття
+  else book('living', -livingCost());
 }
 
 // ================= Корпорація =================
@@ -1029,6 +1031,7 @@ function migrateState() {
   if (typeof clubsState === 'function') clubsState();
   if (typeof groupState === 'function') groupState();
   if (typeof liveState === 'function') liveState();
+  for (const k of Object.keys(SKILLS)) if (state.me.skills[k] == null) state.me.skills[k] = 0;
   if (typeof finState === 'function') finState();
   if (typeof cityxState === 'function') cityxState();
   if (typeof laborState === 'function') laborState();
@@ -1380,7 +1383,8 @@ function endOfDay() {
   // банкрутство
   const lim = -diff().bankrupt * priceLvl();
   state.negDays = state.cash < lim ? state.negDays + 1 : 0;
-  if (state.negDays >= 3) { if (typeof triggerDefault === 'function' && state.fin && !(state.fin.defaultDay && state.day - state.fin.defaultDay < 120)) triggerDefault(); else gameOver(); }
+  if (state.negDays >= 3 && state.ls && state.ls.on && !(state.ls.bizUnlocked || state.biz.length + state.fac.length)) { if (typeof personalBankruptcy === 'function') personalBankruptcy(); }
+  else if (state.negDays >= 3) { if (typeof triggerDefault === 'function' && state.fin && !(state.fin.defaultDay && state.day - state.fin.defaultDay < 120)) triggerDefault(); else gameOver(); }
   else if (state.cash < 0) toast('⚠️ Від’ємний баланс! Скоротіть витрати або візьміть кредит.', 'bad');
   save();
 }

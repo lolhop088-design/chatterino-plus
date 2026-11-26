@@ -444,3 +444,15 @@ ul.alerts li.read { opacity: .6; }
 .tld { display: block; font-size: 12px; color: var(--muted); }
 .card.goal.done { border-color: var(--good); }
 .speed button { min-width: 34px; padding: 7px 6px; font-weight: 600; }
+/* ===== Режим «Життя» ===== */
+.nowact { margin-top: 6px; font-size: 13px; background: rgba(255,255,255,.12); border-radius: 10px; padding: 4px 8px; display: inline-block; }
+.needs { display: grid; gap: 6px; margin-top: 8px; }
+.needs div { display: grid; grid-template-columns: 120px 1fr 32px; align-items: center; gap: 8px; font-size: 13px; }
+.needs small { text-align: right; font-variant-numeric: tabular-nums; }
+.nbar { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; } .nbar i { display: block; height: 100%; border-radius: 5px; transition: width .3s; }
+.actgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.actgrid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 12px; cursor: pointer; text-align: center; line-height: 1.2; }
+.actgrid button span { font-size: 24px; } .actgrid button small { color: var(--muted); font-size: 10.5px; }
+.actgrid button.on { border-color: #2f6fd6; box-shadow: 0 0 0 2px rgba(47,111,214,.35); }
+.ladder { padding: 6px 0; border-bottom: 1px solid var(--line); } .ladder.cur { font-weight: 700; }
+@media (max-width: 420px) { .needs div { grid-template-columns: 104px 1fr 28px; } }

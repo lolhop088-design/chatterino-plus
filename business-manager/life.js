@@ -19,15 +19,15 @@ const CHILD_TRAITS = {
 };
 const EDU = [
   { name: 'Державна школа', cost: 0, gain: 0.04 },
-  { name: 'Приватна школа', cost: 250, gain: 0.07 },
-  { name: 'Елітний пансіон', cost: 900, gain: 0.1 },
-  { name: 'Пансіон + Ліга плюща', cost: 2500, gain: 0.14 },
+  { name: 'Приватна школа', cost: 15, gain: 0.07 },
+  { name: 'Елітний пансіон', cost: 80, gain: 0.1 },
+  { name: 'Пансіон + Ліга плюща', cost: 400, gain: 0.14 },
 ];
 const MEDICAL = [
   { name: 'Державна медицина', cost: 0, h: 0 },
-  { name: 'Приватна клініка', cost: 300, h: 4 },
-  { name: 'Преміум-страхування', cost: 1500, h: 8 },
-  { name: 'Найкращі лікарі світу', cost: 6000, h: 14 },
+  { name: 'Приватна клініка', cost: 4, h: 4 },
+  { name: 'Преміум-страхування', cost: 25, h: 8 },
+  { name: 'Найкращі лікарі світу', cost: 1500, h: 14 },
 ];
 const LUXURY = {
   supercar: { name: 'Суперкар', icon: '🏎️', price: 4e5, upkeep: 300, status: 5, happy: 3, dep: 0.0006 },
@@ -109,14 +109,14 @@ function donate2(amount, cause) {
 // ---------- Родина ----------
 function findDates() {
   const Lf = lifeState(); if (Lf.partner) return;
-  const c = Math.round(5000 * priceLvl()); if (state.cash < c) return toast('Недостатньо коштів.', 'bad');
+  const c = Math.round(50 * priceLvl()); if (state.cash < c) return toast('Недостатньо коштів.', 'bad');
   book('living', -c);
   const fem = chance(0.5);
   Lf.dates = Array.from({ length: 3 }, () => ({ id: 'dt' + (Lf.seq++), name: `${pick(fem ? FEM : MASC)} ${pick(LAST)}`, age: Math.round(clamp(Lf.age + rnd(-6, 6), 20, 80)), trait: pick(Object.keys(PARTNER_TRAITS)), compat: ri(30, 95), love: 0, look: randLook() }));
 }
 function date(id) {
   const Lf = lifeState(), d = Lf.dates.find((x) => x.id === id); if (!d) return;
-  const c = Math.round(3000 * priceLvl() * (1 + statusScore() / 100)); if (state.cash < c) return toast('Недостатньо коштів.', 'bad');
+  const c = Math.round(40 * priceLvl() * (1 + statusScore() / 25)); if (state.cash < c) return toast('Недостатньо коштів.', 'bad');
   book('living', -c);
   d.love = Math.min(100, d.love + d.compat * rnd(0.15, 0.35) + statusScore() * 0.05);
   Lf.stress = Math.max(0, Lf.stress - 3);
@@ -125,7 +125,7 @@ function date(id) {
 function propose(id, prenup, scale) {
   const Lf = lifeState(), d = Lf.dates.find((x) => x.id === id); if (!d) return;
   if (d.love < 70) return toast('Стосунки ще не настільки близькі (потрібно 70%).', 'bad');
-  const cost = Math.round([3e4, 3e5, 3e6][scale] * priceLvl());
+  const cost = Math.round([1500, 15000, 250000][scale] * priceLvl());
   if (state.cash < cost) return toast(`Весілля коштує ${moneyK(cost)}.`, 'bad');
   if (!chance(prenup ? 0.75 : 0.95)) { d.love -= 20; return log(`💔 ${d.name} поки не готові до шлюбу${prenup ? ' зі шлюбним договором' : ''}.`, 'bad'); }
   book('living', -cost);
@@ -171,7 +171,7 @@ function succession(reason) {
   if (reason === 'death') { const tax = Math.max(0, state.cash) * state.econ.taxRate * 0.5; book('tax', -tax); }
   const siblings = Lf.kids.filter((k) => k.id !== h.id && kidAge(k) >= 18);
   for (const s of siblings) book('family', -Math.max(0, state.cash) * 0.04);
-  state.me.name = h.name; state.me.skills = { business: Math.min(5, h.skills.business), coding: Math.min(5, h.skills.coding || 0), management: Math.min(5, h.skills.management) };
+  state.me.name = h.name; state.me.skills = Object.assign(Object.fromEntries(Object.keys(SKILLS).map((k) => [k, 0])), { business: Math.min(5, h.skills.business), coding: Math.min(5, h.skills.coding || 0), management: Math.min(5, h.skills.management) });
   state.me.look = h.kid && h.kid.look ? h.kid.look : randLook(); state.me.job = null;
   const keepPartner = h.id === 'partner' ? null : null;
   Lf.age = Math.max(18, h.age); Lf.health = clamp(95 - Math.max(0, Lf.age - 40), 40, 95); Lf.stress = 35; Lf.happy = 50;
@@ -216,7 +216,7 @@ function lifeDaily() {
   // хвороби
   if (chance(0.002 + Math.max(0, Lf.age - 50) * 0.0002 + Lf.stress * 0.00003)) {
     const dmg = ri(8, 25); Lf.health = Math.max(1, Lf.health - dmg);
-    const bill = Math.round(rnd(1, 5) * 1e4 * priceLvl() * (1 + Lf.medical)); book('family', -bill);
+    const bill = Math.round(rnd(40, 300) * priceLvl() * (Lf.medical ? 0.4 : 1) + Math.max(0, netWorth()) * rnd(0, 0.0004)); book('family', -bill);
     log(`🤒 ${state.me.name} захворів(-ла): здоров’я −${dmg}. Лікування ${money(bill)}.`, 'bad');
   }
   // партнер і діти

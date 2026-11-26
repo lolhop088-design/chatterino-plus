@@ -98,7 +98,7 @@ const kpi = (label, value, cls = '', sub = '') => `<div class="kpi"><span>${labe
 function bar(v, max = 100, cls) { const r = clamp(v / max, 0, 1); const c = cls || (r >= 0.7 ? 'good' : r >= 0.45 ? 'mid' : 'bad'); return `<div class="bar ${c}"><i style="width:${(r * 100).toFixed(0)}%"></i></div>`; }
 const repBar = (r) => `${bar(r)}<small>${r.toFixed(0)}/100</small>`;
 function stars(x) { const n = clamp(Math.round((x - 0.4) * 4.5), 1, 5); return '★'.repeat(n) + '☆'.repeat(5 - n); }
-function skillDots(s) { const n = Math.round(s); return `<span class="skill" title="${s.toFixed(1)}">${'●'.repeat(n)}${'○'.repeat(5 - n)}</span> <small>${s.toFixed(1)}</small>`; }
+function skillDots(s) { s = s || 0; const n = Math.round(s); return `<span class="skill" title="${s.toFixed(1)}">${'●'.repeat(n)}${'○'.repeat(5 - n)}</span> <small>${s.toFixed(1)}</small>`; }
 const pn = (v, f = money) => `<span class="${v < 0 ? 'neg' : 'pos'}">${f(v)}</span>`;
 const tabsHtml = (tabs, cur) => `<div class="tabs">${tabs.map(([id, n]) => `<button class="${cur === id ? 'on' : ''}" data-act="tab" data-v="${id}">${n}</button>`).join('')}</div>`;
 function spark(data, w = 80, h = 24) {
@@ -917,9 +917,11 @@ function startPrompt(canCancel) {
       <label>Назва компанії <input id="coName" maxlength="32" value="Коваль Груп"></label></div></div>
     <label>Шкіра</label>${sw('skin')}<label>Волосся</label>${sw('hair')}<label>Одяг</label>${sw('shirt')}
     <div class="chips filter">${AVATAR.style.map((s) => `<button class="chip ${look.style === s ? 'on' : ''}" data-act="look" data-k="style" data-v="${s}">${{ short: 'Коротке', long: 'Довге', bun: 'Пучок', bald: 'Лисий' }[s]}</button>`).join('')}</div>
+    <label>Режим гри</label><div class="citylist"><label class="cityopt"><input type="radio" name="gmode" value="life" checked><span><b>🧑 Симулятор життя</b> <small>почніть молодим: навчання, робота, стосунки, потреби — і, якщо захочете, власна бізнес-імперія</small></span></label><label class="cityopt"><input type="radio" name="gmode" value="biz"><span><b>🏢 Бізнес-імперія</b> <small>класичний старт підприємцем з $4 000</small></span></label></div>
+    <label>Вік на старті (для симулятора життя)</label><div class="chips filter">${[[16, '16 — школяр'], [18, '18 — випускник'], [22, '22 — молодий фахівець']].map(([a, n]) => `<label class="chip"><input type="radio" name="sage" value="${a}" ${a === 18 ? 'checked' : ''}> ${n}</label>`).join('')}</div>
     <label>Складність</label><div class="citylist">${Object.entries(DIFFICULTY).map(([k, D]) => `<label class="cityopt"><input type="radio" name="diff" value="${k}" ${k === 'normal' ? 'checked' : ''}><span><b>${D.name}</b> <small class="muted">старт ${moneyK(D.cash)}</small><br><small>${D.desc}</small></span></label>`).join('')}</div>
     <label>Місто</label><div class="citylist">${Object.entries(CITIES).map(([k, C], i) => `<label class="cityopt"><input type="radio" name="city" value="${k}" ${i === 0 ? 'checked' : ''}><span><b>${C.name}</b> <small class="muted">${C.flag}</small><br><small>${C.desc}</small></span></label>`).join('')}</div>
-    <div class="row end">${canCancel ? '<button class="btn" data-act="modalClose">Скасувати</button>' : ''}<button class="btn primary" data-act="startGame">Почати з $4 000</button></div>`);
+    <div class="row end">${canCancel ? '<button class="btn" data-act="modalClose">Скасувати</button>' : ''}<button class="btn primary" data-act="startGame">Почати</button></div>`);
 }
 
 // ================= Дії =================
@@ -1064,7 +1066,8 @@ const ACT = {
     const c = document.querySelector('input[name=city]:checked');
     hideModal();
     const df = document.querySelector('input[name=diff]:checked');
-    newGame({ name: nm, company: co, city: c ? c.value : 'kyiv', difficulty: df ? df.value : 'normal', look: { ...window._draftLook } });
+    const gm = document.querySelector('input[name=gmode]:checked'), sa = document.querySelector('input[name=sage]:checked');
+    newGame({ name: nm, company: co, city: c ? c.value : 'kyiv', difficulty: df ? df.value : 'normal', look: { ...window._draftLook }, mode: gm ? gm.value : 'biz', age: sa ? +sa.value : 18 });
     if (typeof GAME_VERSION !== 'undefined') state.seenVersion = GAME_VERSION;
     save(); setSpeed(1);
   },
@@ -1108,7 +1111,7 @@ if (typeof window !== 'undefined') window.androidBack = function () {
   if (state.ui.view === 'map' && state.ui.lot) { state.ui.lot = null; render(true); return true; }
   if (state.ui.view === 'biz') { state.ui.view = 'businesses'; render(true); return true; }
   if (state.ui.view === 'fac') { state.ui.view = 'industry'; render(true); return true; }
-  if (state.ui.view !== 'home') { state.ui.view = 'home'; render(true); return true; }
+  { const hv = state.ls && state.ls.on ? 'lifehome' : 'home'; if (state.ui.view !== hv) { state.ui.view = hv; render(true); return true; } }
   save();
   return false;
 };

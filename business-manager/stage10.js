@@ -24,7 +24,7 @@ function notify(kind, key, text, view, ttl = 7) {
   if (S.toast && typeof toast === 'function') toast(`${NOTIF_KINDS[kind].icon} ${text}`, kind === 'crit' ? 'bad' : kind === 'opp' ? 'good' : '');
   if (kind === 'crit' && S.pause && state.speed > 0 && typeof setSpeed === 'function') { setSpeed(0); if (typeof toast === 'function') toast('⏸ Гру поставлено на паузу через критичну подію.', 'bad'); }
 }
-const unreadCount = () => (state.notif ? state.notif.list.filter((n) => !n.read).length : 0);
+const unreadCount = () => (state.notif ? state.notif.list.filter((n) => !n.read && n.kind !== 'news').length : 0);
 
 function scanNotifications() {
   const N = notifState(), F = state.fin, e = state.econ;
@@ -54,7 +54,8 @@ function scanNotifications() {
   if (N.snap.phase && N.snap.phase !== e.phase) notify('news', 'phase-' + state.day, `Економіка перейшла у фазу «${PHASES[e.phase].name}».`, 'world', 1);
   N.snap.phase = e.phase;
   if (state.pol && state.pol.history[0] && state.pol.history[0].day === state.day) { const h = state.pol.history[0]; notify('news', 'el-' + state.day, `Вибори: ${h.type === 'pres' ? 'президент' : h.type === 'parl' ? 'парламент' : 'мер'} — переміг(-ла) ${h.res[0].name} (${h.res[0].pct}%).`, 'politics', 1); }
-  // --- можливості
+  // --- можливості (бізнесові — лише коли відкрито бізнес)
+  if (typeof bizOpen === 'function' && !bizOpen()) return;
   for (const co of aliveCos()) {
     if (isSub(co) || co.hist.length < 30) continue;
     const old = co.hist[co.hist.length - 30];
